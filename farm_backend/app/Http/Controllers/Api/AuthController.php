@@ -45,4 +45,20 @@ class AuthController extends Controller
             'message' => 'Başarıyla çıkış yapıldı.'
         ]);
     }
+
+    public function register(\Illuminate\Http\Request $request): \Illuminate\Http\JsonResponse
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => 'required|min:6'
+        ]);
+
+        $token = $this->authService->register($data);
+
+        return response()->json([
+            'message' => 'Kayıt başarılı',
+            'token' => $token
+        ], 201);
+    }
 }

@@ -5,9 +5,18 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\HealthRecordController;
 use App\Http\Controllers\Api\DailyLogController;
 use App\Http\Controllers\Api\FinanceController;
+use App\Http\Controllers\Api\StockController;
+
+// --------------------------------------------------------
+// DIŞARIYA AÇIK ROTALAR (Token Gerektirmeyenler)
+// --------------------------------------------------------
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
 
 
-// Güvenli Rotalar
+// --------------------------------------------------------
+// GÜVENLİ ROTALAR (Sadece Token ile Girilebilenler)
+// --------------------------------------------------------
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
@@ -23,7 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('health-records', [HealthRecordController::class, 'store']);
 
     // Stok Alımı
-    Route::post('stocks/purchase', [\App\Http\Controllers\Api\StockController::class, 'purchase']);
+    Route::post('stocks/purchase', [StockController::class, 'purchase']);
 
     // Finans Modülü API Uçları (index ve store metotlarını otomatik açar)
     Route::apiResource('finances', FinanceController::class)->only(['index', 'store']);
