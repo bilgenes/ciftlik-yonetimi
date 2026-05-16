@@ -30,6 +30,7 @@
       <excludeFolder url="file://$MODULE_DIR$/farm_backend/vendor/laravel/pint" />
       <excludeFolder url="file://$MODULE_DIR$/farm_backend/vendor/laravel/prompts" />
       <excludeFolder url="file://$MODULE_DIR$/farm_backend/vendor/laravel/sail" />
+      <excludeFolder url="file://$MODULE_DIR$/farm_backend/vendor/laravel/sanctum" />
       <excludeFolder url="file://$MODULE_DIR$/farm_backend/vendor/laravel/serializable-closure" />
       <excludeFolder url="file://$MODULE_DIR$/farm_backend/vendor/laravel/tinker" />
       <excludeFolder url="file://$MODULE_DIR$/farm_backend/vendor/league/commonmark" />

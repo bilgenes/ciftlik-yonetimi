@@ -129,6 +129,7 @@
       <path value="$PROJECT_DIR$/farm_backend/vendor/phpoption/phpoption" />
       <path value="$PROJECT_DIR$/farm_backend/vendor/symfony/polyfill-intl-normalizer" />
       <path value="$PROJECT_DIR$/farm_backend/vendor/symfony/polyfill-php80" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/laravel/sanctum" />
     </include_path>
   </component>
   <component name="PhpProjectSharedConfiguration" php_language_level="8.2" />
