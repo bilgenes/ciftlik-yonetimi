@@ -2,20 +2,22 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\CowController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\HealthRecordController;
+use App\Http\Controllers\Api\DailyLogController;
 
-// Dışarıya Açık Rota
-Route::post('/login', [AuthController::class, 'login']);
 
-// Güvenli Rotalar (Sadece geçerli Token'ı olanlar girebilir)
+// Güvenli Rotalar
 Route::middleware('auth:sanctum')->group(function () {
-
-    // Çıkış Yapma Rotası (Buraya eklendi)
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // İnek Yönetimi
+    // İnekler
     Route::apiResource('cows', CowController::class);
 
-// İleride buraya eklenecekler:
-// Route::apiResource('daily-logs', DailyLogController::class);
-// Route::apiResource('health-records', HealthRecordController::class);
+    // Günlük Kayıtlar
+    Route::get('daily-logs/last', [DailyLogController::class, 'getLastLog']);
+    Route::post('daily-logs', [DailyLogController::class, 'store']);
+
+    // Sağlık Kayıtları
+    Route::get('health-records/cow/{cowId}', [HealthRecordController::class, 'getCowRecords']);
+    Route::post('health-records', [HealthRecordController::class, 'store']);
 });

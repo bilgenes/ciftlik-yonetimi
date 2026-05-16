@@ -18,6 +18,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(CowServiceInterface::class, CowService::class);
         $this->app->bind(AuthServiceInterface::class, AuthService::class);
         $this->app->bind(DailyLogServiceInterface::class, DailyLogService::class);
+        $this->app->bind(HealthRecordServiceInterface::class, HealthRecordService::class);
     }
 
     public function boot(): void

@@ -9,31 +9,62 @@ class DailyLogService implements DailyLogServiceInterface
 {
 public function calculateDailyCosts(array $dailyData): array
 {
-// 1. Ayarları Veritabanından Çek (Artık dinamik okuyoruz)
-$danaYemCarpani = (float) Setting::where('key', 'dana_yem_katsayisi')->value('value');
-$buzagiSutTuketimi = (float) Setting::where('key', 'buzagi_gunluk_sut_lt')->value('value');
+// 1. Tüm Katsayıları Ayarlardan Çek (Veritabanından)
+$settings = Setting::pluck('value', 'key');
+
+$danaYemCarp = (float) $settings['dana_yem_katsayisi'];
+$hamileYemCarp = (float) $settings['hamile_yem_katsayisi'];
+
+$danaSilajCarp = (float) $settings['dana_silaj_katsayisi'];
+$hamileSilajCarp = (float) $settings['hamile_silaj_katsayisi'];
+
+$danaSamanCarp = (float) $settings['dana_saman_katsayisi'];
+$hamileSamanCarp = (float) $settings['hamile_saman_katsayisi'];
+
+$buzagiSutTuketimi = (float) $settings['buzagi_gunluk_sut_lt'];
 
 // 2. İnek Sayılarını Kategorilere Göre Al
 $sagmalSayisi = Cow::where('category', 'sut_veren')->where('status', 'aktif')->count();
 $danaSayisi = Cow::where('category', 'dana')->where('status', 'aktif')->count();
+$hamileSayisi = Cow::where('category', 'hamile')->where('status', 'aktif')->count();
 $buzagiSayisi = Cow::where('category', 'buzagi')->where('status', 'aktif')->count();
 
-// 3. Buzağıların içtiği sütü, üretilen toplam sütten düş (Gerçek net süt)
+// 3. Süt Hesaplaması (Buzağıların payı düşülüyor)
 $toplamBuzagiSutu = $buzagiSayisi * $buzagiSutTuketimi;
-$netSut = $dailyData['milk_produced'] - $toplamBuzagiSutu;
+$netSut = max(0, $dailyData['milk_produced'] - $toplamBuzagiSutu); // Eksiye düşmemesi için max() kullanıyoruz
 
-// 4. Yem Tüketimi Dağılımı Hesaplama (Algoritma)
-// Normal inek 1 birim, dana 3 birim (ayar dosyasından gelen değer) yiyor sayarsak:
-$toplamYemBirimi = $sagmalSayisi + ($danaSayisi * $danaYemCarpani);
+// 4. Tüketim Birimlerini Hesapla (Sağmal inek her şeyden 1 birim yer varsayılır)
+$toplamYemBirimi = $sagmalSayisi + ($danaSayisi * $danaYemCarp) + ($hamileSayisi * $hamileYemCarp);
+$toplamSilajBirimi = $sagmalSayisi + ($danaSayisi * $danaSilajCarp) + ($hamileSayisi * $hamileSilajCarp);
+$toplamSamanBirimi = $sagmalSayisi + ($danaSayisi * $danaSamanCarp) + ($hamileSayisi * $hamileSamanCarp);
 
-// Gelen toplam yemi birimlere bölerek maliyet hesaplaması için zemin hazırlıyoruz
-$birimBasinaYem = $toplamYemBirimi > 0 ? ($dailyData['feed_consumed'] / $toplamYemBirimi) : 0;
+// 5. Birim Başına Düşen Miktarları Bul (Günlük girilen toplam miktar / Toplam Birim)
+$birimYem = $toplamYemBirimi > 0 ? ($dailyData['feed_consumed'] / $toplamYemBirimi) : 0;
+$birimSilaj = $toplamSilajBirimi > 0 ? ($dailyData['silage_consumed'] / $toplamSilajBirimi) : 0;
+$birimSaman = $toplamSamanBirimi > 0 ? ($dailyData['straw_consumed'] / $toplamSamanBirimi) : 0;
 
+// 6. Raporu Döndür
 return [
-'net_satilabilir_sut' => $netSut,
-'buzagilarin_ictigi_sut' => $toplamBuzagiSutu,
-'normal_inek_yem_maliyeti' => $birimBasinaYem,
-'dana_basina_yem_maliyeti' => $birimBasinaYem * $danaYemCarpani
+'sut_raporu' => [
+'uretilen_toplam' => $dailyData['milk_produced'],
+'buzagilara_giden' => $toplamBuzagiSutu,
+'satilabilir_net_sut' => $netSut,
+],
+'normal_inek_tuketimi' => [
+'yem' => $birimYem,
+'silaj' => $birimSilaj,
+'saman' => $birimSaman,
+],
+'dana_tuketimi' => [
+'yem' => $birimYem * $danaYemCarp,
+'silaj' => $birimSilaj * $danaSilajCarp,
+'saman' => $birimSaman * $danaSamanCarp,
+],
+'hamile_inek_tuketimi' => [
+'yem' => $birimYem * $hamileYemCarp,
+'silaj' => $birimSilaj * $hamileSilajCarp,
+'saman' => $birimSaman * $hamileSamanCarp,
+]
 ];
 }
 }
