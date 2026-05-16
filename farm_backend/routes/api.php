@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\CowController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\HealthRecordController;
 use App\Http\Controllers\Api\DailyLogController;
+use App\Http\Controllers\Api\FinanceController;
 
 
 // Güvenli Rotalar
@@ -20,4 +21,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Sağlık Kayıtları
     Route::get('health-records/cow/{cowId}', [HealthRecordController::class, 'getCowRecords']);
     Route::post('health-records', [HealthRecordController::class, 'store']);
+
+    // Stok Alımı
+    Route::post('stocks/purchase', [\App\Http\Controllers\Api\StockController::class, 'purchase']);
+
+    // Finans Modülü API Uçları (index ve store metotlarını otomatik açar)
+    Route::apiResource('finances', FinanceController::class)->only(['index', 'store']);
 });
