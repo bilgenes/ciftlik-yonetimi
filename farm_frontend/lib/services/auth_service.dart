@@ -53,4 +53,23 @@ class AuthService {
       return false;
     }
   }
+
+  // Çıkış Yapma Metodu
+  Future<void> logout() async {
+    try {
+      // 1. İsteğe bağlı: Backend'e de çıkış yaptığımızı bildirebiliriz
+      String? token = await _storage.read(key: 'auth_token');
+      if (token != null) {
+        await _dio.post(
+          '$baseUrl/logout',
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
+      }
+    } catch (e) {
+      print('Backend çıkış hatası: $e');
+    } finally {
+      // 2. Her durumda cihazdaki token'ı sil (En önemlisi bu)
+      await _storage.delete(key: 'auth_token');
+    }
+  }
 }

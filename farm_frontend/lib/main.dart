@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'core/app_colors.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'views/splash_screen.dart'; // Splash ekranını dahil ettik
 
-void main() {
+void main() async {
+  // Flutter motorunun tam çalıştığından emin oluyoruz
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Türkçe tarih formatı için gerekli dil verilerini başlatıyoruz
+  await initializeDateFormatting('tr_TR', null);
+
   runApp(const FarmApp());
 }
 
