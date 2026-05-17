@@ -6,6 +6,8 @@ import 'home_view.dart';
 import 'cows_view.dart';
 import 'daily_log_view.dart';
 import 'agenda_view.dart';
+import 'health_view.dart';
+import 'stock_view.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -73,8 +75,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const AgendaView(),
     const CowsView(),
     const DailyLogView(),
-    const Center(child: Text('Sağlık Durumları yakında...')),
-    const Center(child: Text('Stok Takip yakında...')),
+    const HealthView(),
+    const StockView(),
     const Center(child: Text('Finans yakında...')),
     const Center(child: Text('Bildirimler yakında...')),
     const Center(child: Text('Analiz yakında...')),
@@ -314,7 +316,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
-      body: _pages[_selectedIndex],
+      body: SafeArea(
+        top: false, // Üst kısmı zaten AppBar pürüzsüzce koruyor
+        bottom:
+            true, // Alttaki telefon menüsüyle çakışmayı küresel olarak engeller
+        child: _pages[_selectedIndex],
+      ),
     );
   }
 }

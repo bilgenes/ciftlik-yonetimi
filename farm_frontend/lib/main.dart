@@ -34,6 +34,10 @@ class FarmApp extends StatelessWidget {
           elevation: 0,
           centerTitle: true,
         ),
+        // main.dart içindeki ilgili kısım böyle olmalı:
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Colors.transparent,
+        ),
         useMaterial3: true,
       ),
       home: const SplashScreen(), // Uygulama artık buradan başlayacak
