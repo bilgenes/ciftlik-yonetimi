@@ -2,167 +2,308 @@ import 'package:flutter/material.dart';
 import '../core/app_colors.dart';
 
 class HomeView extends StatelessWidget {
-  const HomeView({super.key});
+  // Ana sayfadan diğer sayfalara (İneklerim, Finans vb.) geçiş yapabilmek için fonksiyon
+  final Function(int) onNavigate;
+
+  const HomeView({super.key, required this.onNavigate});
+
+  // --- MOCK VERİ: ŞU ANKİ SÜRÜ DURUMU ---
+  final Map<String, int> _currentHerd = const {
+    'Toplam İnek': 142,
+    'Süt Verenler': 85,
+    'Hamileler': 20,
+    'Düveler': 15,
+    'Danalar': 10,
+    'Buzağılar': 12,
+  };
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(22),
-      children: [
-        const Text(
-          'Genel Bakış',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: AppColors.black,
-            fontFamily: 'Comfortaa',
-          ),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: ListView(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: 40 + MediaQuery.of(context).padding.bottom,
         ),
-        const SizedBox(height: 5),
-        Text(
-          'Sistem durumları ve anlık operasyonel veriler.',
-          style: TextStyle(
-            fontSize: 15,
-            color: AppColors.black.withOpacity(0.5),
-          ),
-        ),
-        const SizedBox(height: 30),
-
-        // 4 Farklı Renk Geçişini Birleştiren Dolu Kartlar
-        Row(
-          children: [
-            Expanded(
-              child: _buildGradientCard(
-                'Toplam Hayvan',
-                '42 Baş',
-                Icons.grass,
-                AppColors.greenGradient,
-              ),
-            ), // Yeşil
-            const SizedBox(width: 15),
-            Expanded(
-              child: _buildGradientCard(
-                'Anlık Süt Verimi',
-                '450 L',
-                Icons.water_drop_rounded,
-                AppColors.yellowGradient,
-              ),
-            ), // Sarı
-          ],
-        ),
-        const SizedBox(height: 15),
-        Row(
-          children: [
-            Expanded(
-              child: _buildGradientCard(
-                'Kritik Alarmlar',
-                '2 Adet',
-                Icons.notifications_active_rounded,
-                AppColors.redGradient,
-              ),
-            ), // Kırmızı
-            const SizedBox(width: 15),
-            Expanded(
-              child: _buildGradientCard(
-                'Veteriner Görevi',
-                '5 İşlem',
-                Icons.health_and_safety,
-                AppColors.blackGradient,
-              ),
-            ), // Siyah
-          ],
-        ),
-
-        const SizedBox(height: 40),
-
-        const Text(
-          'Hızlı Operasyonlar',
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: AppColors.black,
-          ),
-        ),
-        const SizedBox(height: 15),
-
-        // İşlem baloncuklarında renkleri karıştırıyoruz
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+        children: [
+          // --- 1. NEŞELİ KARŞILAMA BÖLÜMÜ ---
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildActionChip(
-                'Süt Kaydı Ekle',
-                Icons.add_circle_outline,
-                AppColors.strawYellow,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '👋 Günaydın!',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'Enes Çiftliğine\nHoş Geldin...',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Comfortaa',
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.strawYellow.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.strawYellow,
+                          width: 2,
+                        ),
+                      ),
+                      child: const Text(
+                        'Ne Yapmak İstersin?',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.black,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              _buildActionChip(
-                'Hayvan Girişi',
-                Icons.add_box_outlined,
-                AppColors.primaryGreen,
-              ),
-              _buildActionChip(
-                'Veteriner Sevk',
-                Icons.medical_services_outlined,
-                AppColors.secondaryPink,
-              ),
-              _buildActionChip(
-                'Stok Düş',
-                Icons.remove_circle_outline,
-                AppColors.barnRed,
+              // Sağ Üstte Sevimli/Canlı Bir İkon Gösterimi
+              Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.black, width: 2.5),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 8,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: const Center(
+                  child: Text('🚜', style: TextStyle(fontSize: 32)),
+                ),
               ),
             ],
           ),
-        ),
-      ],
+
+          const SizedBox(height: 35),
+
+          // --- 2. SÜRÜ DURUMU (Görsel Özet) ---
+          const Text(
+            'Kısa Sürü Özeti',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.black,
+              fontFamily: 'Comfortaa',
+            ),
+          ),
+          const SizedBox(height: 15),
+
+          // Büyük Toplam İnek Kartı
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: AppColors.blackGradient,
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(color: AppColors.black, width: 3),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10,
+                  offset: Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Kayıtlı Canlı Sayısı',
+                      style: TextStyle(
+                        color: AppColors.white.withOpacity(0.8),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _currentHerd['Toplam İnek'].toString(),
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.pets_rounded,
+                    color: AppColors.primaryGreen,
+                    size: 40,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 15),
+
+          // Alt Kategoriler Yatay Liste
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildCountBadge(
+                  'Süt Veren',
+                  _currentHerd['Süt Verenler']!,
+                  AppColors.primaryGreen,
+                ),
+                const SizedBox(width: 10),
+                _buildCountBadge(
+                  'Hamile',
+                  _currentHerd['Hamileler']!,
+                  AppColors.secondaryPink,
+                ),
+                const SizedBox(width: 10),
+                _buildCountBadge(
+                  'Düve',
+                  _currentHerd['Düveler']!,
+                  AppColors.strawYellow,
+                ),
+                const SizedBox(width: 10),
+                _buildCountBadge(
+                  'Dana',
+                  _currentHerd['Danalar']!,
+                  AppColors.black,
+                ),
+                const SizedBox(width: 10),
+                _buildCountBadge(
+                  'Buzağı',
+                  _currentHerd['Buzağılar']!,
+                  AppColors.barnRed,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 35),
+
+          // --- 3. HIZLI ERİŞİM BUTONLARI (Kocaman, Tıklanabilir Kartlar) ---
+          const Text(
+            'Hızlı Erişim',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.black,
+              fontFamily: 'Comfortaa',
+            ),
+          ),
+          const SizedBox(height: 15),
+
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 15,
+            crossAxisSpacing: 15,
+            childAspectRatio:
+                1.1, // Kartların kareye yakın dikdörtgen olması için
+            children: [
+              // NOT: onNavigate içindeki sayılar, dashboard_screen.dart içindeki _pages dizinin indeksleridir.
+              // Eğer kendi diziliminde Finans 6. sırada değilse o sayıları kendine göre ayarlayabilirsin.
+              _buildQuickAccessCard(
+                'İneklerim',
+                'Tüm Sürüyü Yönet',
+                Icons.grass_rounded,
+                AppColors.secondaryPink,
+                () => onNavigate(2),
+              ), // İneklerim genelde index 2
+              _buildQuickAccessCard(
+                'Günlük Sayfam',
+                'Rasyon ve Süt',
+                Icons.edit_note_rounded,
+                AppColors.strawYellow,
+                () => onNavigate(3),
+              ), // Günlük Sayfam genelde index 3
+              _buildQuickAccessCard(
+                'Sağlık Durumu',
+                'Tedavi ve Aşılar',
+                Icons.medical_services_rounded,
+                AppColors.barnRed,
+                () => onNavigate(4),
+              ), // Sağlık genelde index 4
+              _buildQuickAccessCard(
+                'Finans',
+                'Gelir & Gider',
+                Icons.payments_rounded,
+                AppColors.primaryGreen,
+                () => onNavigate(6),
+              ), // Finans genelde index 6
+            ],
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildGradientCard(
-    String title,
-    String value,
-    IconData icon,
-    LinearGradient gradient,
-  ) {
+  // --- YARDIMCI WIDGET'LAR ---
+
+  // Ufak Kategori Rozetleri
+  Widget _buildCountBadge(String title, int count, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(30),
-        boxShadow: [
-          BoxShadow(
-            color: gradient.colors.last.withOpacity(0.3),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color, width: 2),
+        boxShadow: const [
+          BoxShadow(color: Colors.black, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: AppColors.white.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Icon(icon, color: AppColors.white, size: 28),
-          ),
-          const SizedBox(height: 20),
           Text(
-            value,
-            style: const TextStyle(
-              fontSize: 30,
+            count.toString(),
+            style: TextStyle(
+              fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: AppColors.white,
+              color: color,
             ),
           ),
-          const SizedBox(height: 5),
+          const SizedBox(height: 4),
           Text(
             title,
-            style: TextStyle(
-              fontSize: 13,
-              color: AppColors.white.withOpacity(0.85),
-              fontWeight: FontWeight.w500,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: AppColors.black,
             ),
           ),
         ],
@@ -170,29 +311,63 @@ class HomeView extends StatelessWidget {
     );
   }
 
-  Widget _buildActionChip(String label, IconData icon, Color borderColor) {
-    return Container(
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: borderColor, width: 2),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: borderColor, size: 22),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.black,
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
+  // Hızlı Erişim Kartları
+  Widget _buildQuickAccessCard(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(25),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: AppColors.black, width: 2.5),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 8,
+              offset: Offset(0, 4),
             ),
-          ),
-        ],
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 30),
+            ),
+            const Spacer(),
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.black,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+                color: AppColors.black.withOpacity(0.5),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

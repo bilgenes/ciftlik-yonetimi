@@ -8,6 +8,10 @@ import 'daily_log_view.dart';
 import 'agenda_view.dart';
 import 'health_view.dart';
 import 'stock_view.dart';
+import 'finance_view.dart';
+import 'notifications_view.dart';
+import 'analysis_view.dart';
+import 'settings_view.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -70,17 +74,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     {'title': 'Ayarlar', 'icon': Icons.settings_rounded, 'color': Colors.grey},
   ];
 
-  final List<Widget> _pages = [
-    const HomeView(),
+  late final List<Widget> _pages = [
+    HomeView(
+      onNavigate: (index) {
+        setState(() {
+          _selectedIndex =
+              index; // Hızlı Erişim butonuna basılınca sayfayı değiştirir
+        });
+      },
+    ),
     const AgendaView(),
     const CowsView(),
     const DailyLogView(),
     const HealthView(),
     const StockView(),
-    const Center(child: Text('Finans yakında...')),
-    const Center(child: Text('Bildirimler yakında...')),
-    const Center(child: Text('Analiz yakında...')),
-    const Center(child: Text('Ayarlar yakında...')),
+    const FinanceView(),
+    const NotificationsView(),
+    const AnalysisView(),
+    const SettingsView(),
   ];
 
   Future<void> _handleLogout() async {

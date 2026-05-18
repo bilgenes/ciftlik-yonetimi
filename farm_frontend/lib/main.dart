@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/app_colors.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'views/splash_screen.dart'; // Splash ekranını dahil ettik
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 void main() async {
   // Flutter motorunun tam çalıştığından emin oluyoruz
@@ -19,8 +20,19 @@ class FarmApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Çiftlik Yönetimi',
+      title: 'Modern Çiftlik',
       debugShowCheckedModeBanner: false,
+
+      // TÜRKÇE DİL DESTEĞİ BURADA DEVREYE GİRİYOR
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('tr', 'TR'), // Uygulamayı zorla Türkçe yapar
+      ],
+      locale: const Locale('tr', 'TR'),
       theme: ThemeData(
         scaffoldBackgroundColor: AppColors.background,
         colorScheme: ColorScheme.light(
