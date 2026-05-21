@@ -26,4 +26,12 @@ class CowService implements CowServiceInterface
         
         return Cow::create($data);
     }
+
+    /**
+     * Küpe numarasına göre ineği bulur.
+     */
+    public function getCowByTag(string $tagNumber): ?Cow
+    {
+        return Cow::where('tag_number', $tagNumber)->with(['healthRecords', 'dailyLogs'])->first();
+    }
 }

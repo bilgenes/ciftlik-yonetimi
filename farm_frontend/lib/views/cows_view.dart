@@ -2,64 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../core/app_colors.dart';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:farm_frontend/providers/cow_provider.dart';
+import 'package:farm_frontend/widgets/shimmer_loading.dart';
+import 'package:farm_frontend/models/cow.dart';
+
 // --- GELİŞMİŞ VERİ MODELİ ---
-class Cow {
-  String id;
-  String name;
-  String tagNumber; // Zorunlu Küpe
-  DateTime birthDate; // Zorunlu Doğum
-  String category; // Tümü, Süt Veren İnekler, Düveler...
-  String chronicDisease;
-  int calfCount;
-  String medicalHistory;
-  double totalMilkProduced; // Yeni: Toplam Süt
-  double totalIncome;
-  double totalCost;
-  String notes;
-  String status;
+// (Cow modeli backend'den JSON olarak geleceği için artık toJson/fromJson yapısına ihtiyacımız var.
+// Şimdilik dynamic kullanarak veya Map'den dönüştürerek halledebiliriz.)
 
-  Cow({
-    required this.id,
-    required this.name,
-    required this.tagNumber,
-    required this.birthDate,
-    required this.category,
-    this.chronicDisease = 'Yok',
-    this.calfCount = 0,
-    this.medicalHistory = 'Temiz',
-    this.totalMilkProduced = 0.0,
-    this.totalIncome = 0.0,
-    this.totalCost = 0.0,
-    this.notes = '',
-    this.status = 'Aktif',
-  });
-
-  String get ageString {
-    final now = DateTime.now();
-    int years = now.year - birthDate.year;
-    int months = now.month - birthDate.month;
-    int days = now.day - birthDate.day;
-
-    if (days < 0) {
-      months--;
-      days += 30;
-    }
-    if (months < 0) {
-      years--;
-      months += 12;
-    }
-    return '$years Yıl, $months Ay, $days Gün';
-  }
-}
-
-class CowsView extends StatefulWidget {
+class CowsView extends ConsumerStatefulWidget {
   const CowsView({super.key});
 
   @override
-  State<CowsView> createState() => _CowsViewState();
+  ConsumerState<CowsView> createState() => _CowsViewState();
 }
 
-class _CowsViewState extends State<CowsView> {
+class _CowsViewState extends ConsumerState<CowsView> {
   // 1. Kategoriler Güncellendi
   final List<String> _categories = [
     'Tümü',
@@ -72,38 +31,14 @@ class _CowsViewState extends State<CowsView> {
   ];
   String _selectedCategory = 'Tümü';
 
-  // Örnek Veriler
-  final List<Cow> _cows = [
-    Cow(
-      id: '1',
-      name: 'Sarıkız',
-      tagNumber: 'TR-123456',
-      birthDate: DateTime(2020, 5, 12),
-      category: 'Süt Veren İnekler',
-      calfCount: 2,
-      totalMilkProduced: 12500,
-      totalIncome: 45000,
-      totalCost: 12000,
-    ),
-    Cow(
-      id: '2',
-      name: 'Gülüm',
-      tagNumber: 'TR-987654',
-      birthDate: DateTime(2021, 8, 20),
-      category: 'Hamile İnekler',
-      chronicDisease: 'Hafif Topallık',
-      totalMilkProduced: 8000,
-      totalIncome: 32000,
-      totalCost: 15000,
-    ),
-  ];
-
-  List<Cow> get _filteredCows {
-    if (_selectedCategory == 'Tümü')
-      return _cows.where((c) => c.status == 'Aktif').toList();
-    if (_selectedCategory == 'Ayrılanlar')
-      return _cows.where((c) => c.status != 'Aktif').toList();
-    return _cows
+  List<Cow> _getFilteredCows(List<Cow> cows) {
+    if (_selectedCategory == 'Tümü') {
+      return cows.where((c) => c.status == 'Aktif').toList();
+    }
+    if (_selectedCategory == 'Ayrılanlar') {
+      return cows.where((c) => c.status != 'Aktif').toList();
+    }
+    return cows
         .where((c) => c.category == _selectedCategory && c.status == 'Aktif')
         .toList();
   }
@@ -382,7 +317,7 @@ class _CowsViewState extends State<CowsView> {
                             selectedDate != null) {
                           setState(() {
                             if (isEditing) {
-                              // Düzenleme
+                              // Düzenleme (Gerçekte API'ye PUT atılacak)
                               cowToEdit.tagNumber = tagCtrl.text;
                               cowToEdit.name = nameCtrl.text.isEmpty
                                   ? 'İsimsiz'
@@ -401,33 +336,15 @@ class _CowsViewState extends State<CowsView> {
                               cowToEdit.medicalHistory = historyCtrl.text;
                               cowToEdit.notes = notesCtrl.text;
                             } else {
-                              // Yeni Ekleme
-                              _cows.add(
-                                Cow(
-                                  id: DateTime.now().millisecondsSinceEpoch
-                                      .toString(),
-                                  tagNumber: tagCtrl.text,
-                                  name: nameCtrl.text.isEmpty
-                                      ? 'İsimsiz'
-                                      : nameCtrl.text,
-                                  birthDate: selectedDate!,
-                                  category: selectedCat,
-                                  calfCount: int.tryParse(calfCtrl.text) ?? 0,
-                                  totalMilkProduced:
-                                      double.tryParse(milkCtrl.text) ?? 0.0,
-                                  totalIncome:
-                                      double.tryParse(incomeCtrl.text) ?? 0.0,
-                                  totalCost:
-                                      double.tryParse(costCtrl.text) ?? 0.0,
-                                  chronicDisease: diseaseCtrl.text.isEmpty
-                                      ? 'Yok'
-                                      : diseaseCtrl.text,
-                                  medicalHistory: historyCtrl.text.isEmpty
-                                      ? 'Temiz'
-                                      : historyCtrl.text,
-                                  notes: notesCtrl.text,
+                              // Yeni Ekleme (Gerçekte API'ye POST atılacak)
+                              // _cows listesi kaldırıldığı için burada API çağrısı yapılmalı
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Yeni hayvan ekleme API\'ye bağlanacak.'),
+                                  backgroundColor: AppColors.primaryGreen,
                                 ),
                               );
+                              // İşlem bittikten sonra: ref.refresh(cowProvider);
                             }
                           });
                           Navigator.pop(context); // Formu Kapat
@@ -890,6 +807,8 @@ class _CowsViewState extends State<CowsView> {
 
   @override
   Widget build(BuildContext context) {
+    final cowAsyncValue = ref.watch(cowProvider);
+    
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton.extended(
@@ -1019,8 +938,11 @@ class _CowsViewState extends State<CowsView> {
 
           // İNEK KARTLARI LİSTESİ
           Expanded(
-            child: _filteredCows.isEmpty
-                ? const Center(
+            child: cowAsyncValue.when(
+              data: (cows) {
+                final filteredCows = _getFilteredCows(cows);
+                if (filteredCows.isEmpty) {
+                  return const Center(
                     child: Text(
                       'Bu kategoride kayıtlı hayvan bulunmuyor.',
                       style: TextStyle(
@@ -1029,12 +951,13 @@ class _CowsViewState extends State<CowsView> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                  )
-                : ListView.builder(
+                  );
+                }
+                return ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _filteredCows.length,
+                    itemCount: filteredCows.length,
                     itemBuilder: (context, index) {
-                      final cow = _filteredCows[index];
+                      final cow = filteredCows[index];
                       return InkWell(
                         onTap: () => _showCowDetails(cow),
                         child: Container(
@@ -1130,7 +1053,11 @@ class _CowsViewState extends State<CowsView> {
                         ),
                       );
                     },
-                  ),
+                  );
+              },
+              loading: () => const ShimmerLoadingList(),
+              error: (err, stack) => Center(child: Text('Hata: $err')),
+            ),
           ),
         ],
       ),

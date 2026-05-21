@@ -21,6 +21,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
     // İnekler
+    Route::get('cows/by-tag/{tag}', [CowController::class, 'getByTag']);
     Route::apiResource('cows', CowController::class);
 
     // Günlük Kayıtlar

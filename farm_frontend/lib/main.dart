@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'core/app_colors.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:farm_frontend/services/notification_service.dart';
 import 'views/splash_screen.dart'; // Splash ekranını dahil ettik
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -8,10 +11,18 @@ void main() async {
   // Flutter motorunun tam çalıştığından emin oluyoruz
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Firebase başlatma (JSON dosyaları eklendiğinde çalışacak)
+  try {
+    await Firebase.initializeApp();
+    await NotificationService().init();
+  } catch (e) {
+    debugPrint('Firebase başlatılamadı: $e');
+  }
+
   // Türkçe tarih formatı için gerekli dil verilerini başlatıyoruz
   await initializeDateFormatting('tr_TR', null);
 
-  runApp(const FarmApp());
+  runApp(const ProviderScope(child: FarmApp()));
 }
 
 class FarmApp extends StatelessWidget {

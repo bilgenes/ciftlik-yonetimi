@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1006770276740",
+    "project_id": "modernciftlik-824b2",
+    "storage_bucket": "modernciftlik-824b2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1006770276740:android:29d59ce9dd6997910535d1",
+        "android_client_info": {
+          "package_name": "com.example.farm_frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDhfRRTMxFweGBsowSAaKCHhb1RveYMMPA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

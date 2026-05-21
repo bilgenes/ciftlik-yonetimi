@@ -34,4 +34,17 @@ class CowController extends Controller
             'cow' => $cow
         ], 201);
     }
+
+    public function getByTag(string $tag): JsonResponse
+    {
+        $tag = htmlspecialchars(strip_tags($tag)); // Basic sanitization
+
+        $cow = $this->cowService->getCowByTag($tag);
+
+        if (!$cow) {
+            return response()->json(['message' => 'Hayvan bulunamadı.'], 404);
+        }
+
+        return response()->json($cow);
+    }
 }

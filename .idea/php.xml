@@ -130,6 +130,31 @@
       <path value="$PROJECT_DIR$/farm_backend/vendor/symfony/polyfill-intl-normalizer" />
       <path value="$PROJECT_DIR$/farm_backend/vendor/symfony/polyfill-php80" />
       <path value="$PROJECT_DIR$/farm_backend/vendor/laravel/sanctum" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/auth" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/cloud-core" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/cloud-storage" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/common-protos" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/gax" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/grpc-gcp" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/longrunning" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/google/protobuf" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/cuyz/valinor" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/psr/cache" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/mtdowling/jmespath.php" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/fig/http-message-util" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/beste/clock" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/beste/in-memory-cache" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/beste/json" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/rize/uri-template" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/kreait/firebase-php" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/kreait/firebase-tokens" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/kreait/laravel-firebase" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/firebase/php-jwt" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/grpc/grpc" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/symfony/cache-contracts" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/symfony/cache" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/symfony/var-exporter" />
+      <path value="$PROJECT_DIR$/farm_backend/vendor/lcobucci/jwt" />
     </include_path>
   </component>
   <component name="PhpProjectSharedConfiguration" php_language_level="8.2" />
