@@ -312,46 +312,92 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           ),
                         ),
                       ),
-                      onPressed: () {
+                      onPressed: () async {
                         if (formKey.currentState!.validate() &&
                             selectedDate != null) {
-                          setState(() {
-                            if (isEditing) {
-                              // Düzenleme (Gerçekte API'ye PUT atılacak)
-                              cowToEdit.tagNumber = tagCtrl.text;
-                              cowToEdit.name = nameCtrl.text.isEmpty
-                                  ? 'İsimsiz'
-                                  : nameCtrl.text;
-                              cowToEdit.birthDate = selectedDate!;
-                              cowToEdit.category = selectedCat;
-                              cowToEdit.calfCount =
-                                  int.tryParse(calfCtrl.text) ?? 0;
-                              cowToEdit.totalMilkProduced =
-                                  double.tryParse(milkCtrl.text) ?? 0.0;
-                              cowToEdit.totalIncome =
-                                  double.tryParse(incomeCtrl.text) ?? 0.0;
-                              cowToEdit.totalCost =
-                                  double.tryParse(costCtrl.text) ?? 0.0;
-                              cowToEdit.chronicDisease = diseaseCtrl.text;
-                              cowToEdit.medicalHistory = historyCtrl.text;
-                              cowToEdit.notes = notesCtrl.text;
-                            } else {
-                              // Yeni Ekleme (Gerçekte API'ye POST atılacak)
-                              // _cows listesi kaldırıldığı için burada API çağrısı yapılmalı
+                          // Yükleniyor durumunu göstermek istersen buraya ekleyebilirsin
+
+                          if (isEditing) {
+                            // --- GÜNCELLEME (PUT) İŞLEMİ ---
+                            cowToEdit!.tagNumber = tagCtrl.text;
+                            cowToEdit.name = nameCtrl.text.isEmpty
+                                ? 'İsimsiz'
+                                : nameCtrl.text;
+                            cowToEdit.birthDate = selectedDate!;
+                            cowToEdit.category = selectedCat;
+                            cowToEdit.calfCount =
+                                int.tryParse(calfCtrl.text) ?? 0;
+                            cowToEdit.totalMilkProduced =
+                                double.tryParse(milkCtrl.text) ?? 0.0;
+                            cowToEdit.totalIncome =
+                                double.tryParse(incomeCtrl.text) ?? 0.0;
+                            cowToEdit.totalCost =
+                                double.tryParse(costCtrl.text) ?? 0.0;
+                            cowToEdit.chronicDisease = diseaseCtrl.text;
+                            cowToEdit.medicalHistory = historyCtrl.text;
+                            cowToEdit.notes = notesCtrl.text;
+
+                            final success = await ref
+                                .read(cowProvider.notifier)
+                                .updateCow(cowToEdit);
+                            if (success && mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Yeni hayvan ekleme API\'ye bağlanacak.'),
+                                  content: Text('Bilgiler güncellendi!'),
                                   backgroundColor: AppColors.primaryGreen,
                                 ),
                               );
-                              // İşlem bittikten sonra: ref.refresh(cowProvider);
                             }
-                          });
-                          Navigator.pop(context); // Formu Kapat
-                          if (isEditing)
-                            Navigator.pop(
-                              context,
-                            ); // Detay penceresini de kapat (yenilenmesi için)
+                          } else {
+                            // --- YENİ EKLEME (POST) İŞLEMİ ---
+                            final newCow = Cow(
+                              id: '', // Backend atayacak
+                              tagNumber: tagCtrl.text,
+                              name: nameCtrl.text.isEmpty
+                                  ? 'İsimsiz'
+                                  : nameCtrl.text,
+                              birthDate: selectedDate!,
+                              category: selectedCat,
+                              calfCount: int.tryParse(calfCtrl.text) ?? 0,
+                              totalMilkProduced:
+                                  double.tryParse(milkCtrl.text) ?? 0.0,
+                              totalIncome:
+                                  double.tryParse(incomeCtrl.text) ?? 0.0,
+                              totalCost: double.tryParse(costCtrl.text) ?? 0.0,
+                              chronicDisease: diseaseCtrl.text.isEmpty
+                                  ? 'Yok'
+                                  : diseaseCtrl.text,
+                              medicalHistory: historyCtrl.text.isEmpty
+                                  ? 'Temiz'
+                                  : historyCtrl.text,
+                              notes: notesCtrl.text,
+                            );
+
+                            final success = await ref
+                                .read(cowProvider.notifier)
+                                .addCow(newCow);
+                            if (success && mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Yeni hayvan eklendi!'),
+                                  backgroundColor: AppColors.primaryGreen,
+                                ),
+                              );
+                            } else if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Ekleme başarısız!'),
+                                  backgroundColor: AppColors.barnRed,
+                                ),
+                              );
+                            }
+                          }
+
+                          if (mounted) {
+                            Navigator.pop(context); // Formu Kapat
+                            if (isEditing)
+                              Navigator.pop(context); // Detay penceresini kapat
+                          }
                         } else if (selectedDate == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -658,12 +704,28 @@ class _CowsViewState extends ConsumerState<CowsView> {
                 side: const BorderSide(color: AppColors.black, width: 2),
               ),
             ),
-            onPressed: () {
-              setState(() {
-                cow.status = 'Kesildi';
-                cow.totalIncome += double.tryParse(incomeCtrl.text) ?? 0.0;
-              });
-              Navigator.pop(context);
+            onPressed: () async {
+              // <-- async eklendi
+              // Kazancı ekle ve durumu değiştir
+              cow.status = 'Kesildi';
+              cow.totalIncome += double.tryParse(incomeCtrl.text) ?? 0.0;
+
+              // Backend'e güncelleme at
+              final success = await ref
+                  .read(cowProvider.notifier)
+                  .updateCow(cow);
+
+              if (mounted) {
+                Navigator.pop(context); // Pop-up'ı kapat
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('İşlem başarılı.'),
+                      backgroundColor: AppColors.primaryGreen,
+                    ),
+                  );
+                }
+              }
             },
             child: const Text(
               'Onayla',
@@ -808,7 +870,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
   @override
   Widget build(BuildContext context) {
     final cowAsyncValue = ref.watch(cowProvider);
-    
+
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton.extended(
@@ -954,106 +1016,102 @@ class _CowsViewState extends ConsumerState<CowsView> {
                   );
                 }
                 return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredCows.length,
-                    itemBuilder: (context, index) {
-                      final cow = filteredCows[index];
-                      return InkWell(
-                        onTap: () => _showCowDetails(cow),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 16),
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: AppColors.white,
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: AppColors.black,
-                              width: 3,
-                            ), // Kalın Premium Kontür
-                            boxShadow: const [
-                              BoxShadow(
-                                color: Colors.black12,
-                                blurRadius: 8,
-                                offset: Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: AppColors.primaryGreen.withOpacity(
-                                    0.15,
-                                  ),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: AppColors.primaryGreen,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.grass_rounded,
-                                  color: AppColors.primaryGreen,
-                                  size: 30,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      cow.tagNumber,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.black,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${cow.name} • ${cow.ageString.split(',')[0]}',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.black.withOpacity(0.6),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 8,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.secondaryPink.withOpacity(
-                                    0.2,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: AppColors.secondaryPink,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Text(
-                                  cow.category,
-                                  style: const TextStyle(
-                                    color: AppColors.secondaryPink,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredCows.length,
+                  itemBuilder: (context, index) {
+                    final cow = filteredCows[index];
+                    return InkWell(
+                      onTap: () => _showCowDetails(cow),
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: AppColors.black,
+                            width: 3,
+                          ), // Kalın Premium Kontür
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      );
-                    },
-                  );
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryGreen.withOpacity(0.15),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: AppColors.primaryGreen,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.grass_rounded,
+                                color: AppColors.primaryGreen,
+                                size: 30,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    cow.tagNumber,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.black,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${cow.name} • ${cow.ageString.split(',')[0]}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.black.withOpacity(0.6),
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.secondaryPink.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: AppColors.secondaryPink,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Text(
+                                cow.category,
+                                style: const TextStyle(
+                                  color: AppColors.secondaryPink,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
               },
               loading: () => const ShimmerLoadingList(),
               error: (err, stack) => Center(child: Text('Hata: $err')),
