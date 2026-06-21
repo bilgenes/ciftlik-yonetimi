@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/app_colors.dart';
 import '../core/ui_helper.dart';
+import '../providers/health_provider.dart';
+import '../providers/cow_provider.dart';
+import '../models/cow.dart'; // Gerçek inek modelimiz için eklendi
 
 // --- GELİŞMİŞ SAĞLIK VERİ MODELLERİ ---
 class TreatmentRecord {
@@ -56,14 +61,15 @@ class HealthCow {
   }
 }
 
-class HealthView extends StatefulWidget {
+// 1. ConsumerStatefulWidget Olarak Değiştirildi
+class HealthView extends ConsumerStatefulWidget {
   const HealthView({super.key});
 
   @override
-  State<HealthView> createState() => _HealthViewState();
+  ConsumerState<HealthView> createState() => _HealthViewState();
 }
 
-class _HealthViewState extends State<HealthView> {
+class _HealthViewState extends ConsumerState<HealthView> {
   final List<String> _categories = [
     'Hasta Olan Hayvanlar',
     'Hamile İnekler',
@@ -75,88 +81,6 @@ class _HealthViewState extends State<HealthView> {
   String _selectedCategory = 'Hasta Olan Hayvanlar';
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
-
-  // --- MOCK / SAHTE VERİLER ---
-  final List<HealthCow> _animals = [
-    HealthCow(
-      id: '1',
-      tagNumber: 'TR-1122',
-      name: 'Sarıkız',
-      mainCategory: 'Süt Veren İnekler',
-      healthStatus: 'Hasta',
-      diseaseName: 'Mastit (Meme İltihabı)',
-      sickSince: DateTime.now().subtract(const Duration(days: 5)),
-      treatments: [
-        TreatmentRecord(
-          name: 'Antibiyotik Aşısı',
-          date: DateTime.now().subtract(const Duration(days: 4)),
-          cost: 850.0,
-        ),
-        TreatmentRecord(
-          name: 'Meme İçi Krem Tedavisi',
-          date: DateTime.now().subtract(const Duration(days: 2)),
-          cost: 400.0,
-        ),
-      ],
-    ),
-    HealthCow(
-      id: '2',
-      tagNumber: 'TR-3344',
-      name: 'Benekli',
-      mainCategory: 'Süt Veren İnekler',
-      healthStatus: 'Hamile',
-      pregnancyStartDate: DateTime.now().subtract(const Duration(days: 145)),
-      treatments: [
-        TreatmentRecord(
-          name: 'A Vitamini Takviyesi',
-          date: DateTime.now().subtract(const Duration(days: 90)),
-          cost: 350.0,
-        ),
-        TreatmentRecord(
-          name: 'Kuru Dönem Aşısı',
-          date: DateTime.now().subtract(const Duration(days: 10)),
-          cost: 600.0,
-        ),
-      ],
-    ),
-    HealthCow(
-      id: '3',
-      tagNumber: 'TR-5566',
-      name: 'Minik',
-      mainCategory: 'Buzağılar',
-      healthStatus: 'Sağlıklı',
-      motherTag: 'TR-3344',
-      treatments: [
-        TreatmentRecord(
-          name: 'Septisemi Aşısı',
-          date: DateTime.now().subtract(const Duration(days: 20)),
-          cost: 500.0,
-        ),
-      ],
-    ),
-  ];
-
-  List<HealthCow> get _filteredAnimals {
-    return _animals.where((animal) {
-      final matchesSearch =
-          animal.tagNumber.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          animal.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      if (!matchesSearch) return false;
-
-      if (_selectedCategory == 'Tümü') return true;
-      if (_selectedCategory == 'Hasta Olan Hayvanlar')
-        return animal.healthStatus == 'Hasta';
-      if (_selectedCategory == 'Hamile İnekler')
-        return animal.healthStatus == 'Hamile';
-      if (_selectedCategory == 'Buzağılar')
-        return animal.mainCategory == 'Buzağılar';
-      if (_selectedCategory == 'Danalar')
-        return animal.mainCategory == 'Danalar';
-      if (_selectedCategory == 'Düveler')
-        return animal.mainCategory == 'Düveler';
-      return true;
-    }).toList();
-  }
 
   // --- HASTALIK FORMU ---
   void _showDiseaseForm(HealthCow animal, StateSetter? parentModalState) {
@@ -172,7 +96,6 @@ class _HealthViewState extends State<HealthView> {
               top: 24,
               left: 24,
               right: 24,
-              // KESİN ÇÖZÜM: Klavye yüksekliği + Telefon alt menü yüksekliği
               bottom:
                   24 +
                   MediaQuery.of(context).viewInsets.bottom +
@@ -279,15 +202,23 @@ class _HealthViewState extends State<HealthView> {
                           ),
                         ),
                       ),
-                      onPressed: () {
+                      // Backend'e Gerçek Hastalık Kaydetme İşlemi
+                      onPressed: () async {
                         if (diseaseCtrl.text.isNotEmpty) {
-                          setState(() {
-                            animal.healthStatus = 'Hasta';
-                            animal.diseaseName = diseaseCtrl.text;
-                            animal.sickSince = selectedDate;
-                          });
+                          // Orijinal ineği bul ve güncelle
+                          final liveCows = ref.read(cowProvider).value ?? [];
+                          try {
+                            final originalCow = liveCows.firstWhere(
+                              (c) => c.id == animal.id,
+                            );
+                            originalCow.chronicDisease = diseaseCtrl.text;
+                            await ref
+                                .read(cowProvider.notifier)
+                                .updateCow(originalCow);
+                          } catch (e) {}
+
                           if (parentModalState != null) parentModalState(() {});
-                          Navigator.pop(context);
+                          if (mounted) Navigator.pop(context);
                         }
                       },
                       child: const Text(
@@ -321,7 +252,6 @@ class _HealthViewState extends State<HealthView> {
           top: 24,
           left: 24,
           right: 24,
-          // KESİN ÇÖZÜM: Klavye + Alt Menü
           bottom:
               24 +
               MediaQuery.of(context).viewInsets.bottom +
@@ -391,19 +321,37 @@ class _HealthViewState extends State<HealthView> {
                       side: const BorderSide(color: AppColors.black, width: 3),
                     ),
                   ),
-                  onPressed: () {
+                  // Tedaviyi HealthProvider Üzerinden API'ye Yollama
+                  onPressed: () async {
                     if (nameCtrl.text.isNotEmpty && costCtrl.text.isNotEmpty) {
-                      setState(() {
-                        animal.treatments.add(
-                          TreatmentRecord(
-                            name: nameCtrl.text,
-                            date: DateTime.now(),
+                      final success = await ref
+                          .read(healthProvider.notifier)
+                          .addTreatment(
+                            cowId: animal.id,
+                            type: 'Tedavi/Aşı',
+                            description: nameCtrl.text,
                             cost: double.tryParse(costCtrl.text) ?? 0.0,
+                          );
+
+                      if (success && mounted) {
+                        setState(() {
+                          animal.treatments.add(
+                            TreatmentRecord(
+                              name: nameCtrl.text,
+                              date: DateTime.now(),
+                              cost: double.tryParse(costCtrl.text) ?? 0.0,
+                            ),
+                          );
+                        });
+                        setModalState(() {});
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Tedavi başarıyla kaydedildi.'),
+                            backgroundColor: AppColors.primaryGreen,
                           ),
                         );
-                      });
-                      setModalState(() {});
-                      Navigator.pop(context);
+                      }
                     }
                   },
                   child: const Text(
@@ -502,34 +450,34 @@ class _HealthViewState extends State<HealthView> {
                       side: const BorderSide(color: AppColors.black, width: 3),
                     ),
                   ),
-                  onPressed: () {
-                    setState(() {
-                      animal.healthStatus = 'Sağlıklı';
-                      int count = int.tryParse(countCtrl.text) ?? 1;
-                      for (int i = 1; i <= count; i++) {
-                        _animals.add(
-                          HealthCow(
-                            id:
-                                DateTime.now().millisecondsSinceEpoch
-                                    .toString() +
-                                i.toString(),
-                            tagNumber: 'TR-YENI$i',
-                            name: '${animal.name} Yavrusu $i',
-                            mainCategory: 'Buzağılar',
-                            healthStatus: 'Sağlıklı',
-                            motherTag: animal.tagNumber,
-                            treatments: [],
+                  onPressed: () async {
+                    int count = int.tryParse(countCtrl.text) ?? 1;
+                    for (int i = 1; i <= count; i++) {
+                      // Backend'e Yeni İnek (Buzağı) Ekleme İsteği
+                      final newCalf = Cow(
+                        id: '',
+                        tagNumber:
+                            'TR-YENI-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}$i',
+                        name: '${animal.name} Yavrusu $i',
+                        birthDate: DateTime.now(),
+                        category: 'Buzağılar',
+                        chronicDisease: 'Yok',
+                        medicalHistory: 'Temiz',
+                        notes: 'Anne: ${animal.tagNumber}',
+                      );
+                      await ref.read(cowProvider.notifier).addCow(newCalf);
+                    }
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            '🍼 Buzağılar başarıyla kreşe eklendi!',
                           ),
-                        );
-                      }
-                    });
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('🍼 Buzağılar başarıyla kreşe eklendi!'),
-                        backgroundColor: AppColors.primaryGreen,
-                      ),
-                    );
+                          backgroundColor: AppColors.primaryGreen,
+                        ),
+                      );
+                    }
                   },
                   child: const Text(
                     'Doğumu Onayla',
@@ -548,21 +496,30 @@ class _HealthViewState extends State<HealthView> {
     );
   }
 
-  // --- DETAY KİMLİK KARTLARI ---
-  void _showAnimalHealthDetails(HealthCow animal) {
-    // Annesinin İsmini Bulma Mantığı
-    String motherName = 'Bilinmiyor';
-    if (animal.motherTag != null) {
-      try {
-        final mother = _animals.firstWhere(
-          (c) => c.tagNumber == animal.motherTag,
-        );
-        motherName = mother.name;
-      } catch (e) {
-        // Liste dışı bir anneyse 'Bilinmiyor' kalır
-      }
+  // --- DETAY KİMLİK KARTLARI (TEDAVİLERİ ÇEKME EKLENDİ) ---
+  void _showAnimalHealthDetails(HealthCow animal) async {
+    // 1. Açılmadan önce tedavi listesini API'den çek
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: AppColors.primaryGreen),
+      ),
+    );
+
+    final fetchedTreatments = await ref
+        .read(healthProvider.notifier)
+        .getTreatments(animal.id);
+
+    if (mounted) {
+      Navigator.pop(context); // Yükleme popup'ını kapat
+      setState(() => animal.treatments = fetchedTreatments);
     }
 
+    String motherName =
+        'Bilinmiyor'; // API'den istersen sonradan detaylandırabilirsin
+
+    if (!mounted) return;
     UiHelper.showPremiumBottomSheet(
       context: context,
       child: StatefulBuilder(
@@ -573,7 +530,6 @@ class _HealthViewState extends State<HealthView> {
               top: 24,
               left: 24,
               right: 24,
-              // KESİN ÇÖZÜM: Alt Menü yüksekliğini güvenli boşluğa ekler
               bottom: 24 + MediaQuery.of(context).padding.bottom,
             ),
             decoration: const BoxDecoration(
@@ -635,18 +591,6 @@ class _HealthViewState extends State<HealthView> {
                                 'Teşhis',
                                 animal.diseaseName ?? '',
                               ),
-                              _buildDetailRow(
-                                Icons.timer,
-                                'Hastalık Süresi',
-                                animal.getDurationString(animal.sickSince),
-                              ),
-                              _buildDetailRow(
-                                Icons.calendar_month,
-                                'Başlangıç',
-                                DateFormat(
-                                  'dd/MM/yyyy',
-                                ).format(animal.sickSince!),
-                              ),
                             ],
                             trailing: IconButton(
                               icon: const Icon(
@@ -664,18 +608,9 @@ class _HealthViewState extends State<HealthView> {
                             AppColors.greenGradient,
                             [
                               _buildDetailRow(
-                                Icons.calendar_month,
-                                'Başlangıç',
-                                DateFormat(
-                                  'dd/MM/yyyy',
-                                ).format(animal.pregnancyStartDate!),
-                              ),
-                              _buildDetailRow(
                                 Icons.hourglass_empty,
-                                'Gebelik Süresi',
-                                animal.getDurationString(
-                                  animal.pregnancyStartDate,
-                                ),
+                                'Durum',
+                                'Süresi dolduğunda Doğum yap butonunu kullanın.',
                               ),
                             ],
                           ),
@@ -685,7 +620,6 @@ class _HealthViewState extends State<HealthView> {
                             'Soy ve Büyüme Kartı',
                             AppColors.blackGradient,
                             [
-                              // ANNESİNİN İSMİ BURAYA EKLENDİ
                               _buildDetailRow(
                                 Icons.female,
                                 'Anne Bilgisi',
@@ -699,6 +633,7 @@ class _HealthViewState extends State<HealthView> {
                           'Uygulanan Aşılar ve Tedavi Geçmişi',
                         ),
                         const SizedBox(height: 10),
+
                         if (animal.treatments.isEmpty)
                           Container(
                             padding: const EdgeInsets.all(20),
@@ -816,10 +751,9 @@ class _HealthViewState extends State<HealthView> {
                   ),
                 ),
 
-                // --- ALT AKSİYON BUTONLARI (TAMAMEN YENİLENDİ) ---
+                // --- ALT AKSİYON BUTONLARI ---
                 Column(
                   children: [
-                    // 1. SATIR: TAM GENİŞLİKTE ANA DURUM BUTONU
                     if (animal.healthStatus == 'Sağlıklı')
                       SizedBox(
                         width: double.infinity,
@@ -839,13 +773,18 @@ class _HealthViewState extends State<HealthView> {
                           'İyileşti Olarak İşaretle',
                           AppColors.primaryGreen,
                           AppColors.white,
-                          () {
-                            setState(() {
-                              animal.healthStatus = 'Sağlıklı';
-                              animal.diseaseName = null;
-                              animal.sickSince = null;
-                            });
-                            Navigator.pop(context);
+                          () async {
+                            final liveCows = ref.read(cowProvider).value ?? [];
+                            try {
+                              final originalCow = liveCows.firstWhere(
+                                (c) => c.id == animal.id,
+                              );
+                              originalCow.chronicDisease = 'Yok';
+                              await ref
+                                  .read(cowProvider.notifier)
+                                  .updateCow(originalCow);
+                            } catch (e) {}
+                            if (mounted) Navigator.pop(context);
                           },
                         ),
                       ),
@@ -865,8 +804,6 @@ class _HealthViewState extends State<HealthView> {
                       ),
 
                     const SizedBox(height: 12),
-
-                    // 2. SATIR: İKİNCİL İŞLEMLER (Tedavi Gir ve Düve Oldu)
                     Row(
                       children: [
                         Expanded(
@@ -886,19 +823,29 @@ class _HealthViewState extends State<HealthView> {
                               'Düve Oldu',
                               AppColors.primaryGreen,
                               AppColors.white,
-                              () {
-                                setState(() {
-                                  animal.mainCategory = 'Düveler';
-                                });
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '🎉 ${animal.name} başarıyla Düve kategorisine aktarıldı!',
+                              () async {
+                                final liveCows =
+                                    ref.read(cowProvider).value ?? [];
+                                try {
+                                  final originalCow = liveCows.firstWhere(
+                                    (c) => c.id == animal.id,
+                                  );
+                                  originalCow.category = 'Düveler';
+                                  await ref
+                                      .read(cowProvider.notifier)
+                                      .updateCow(originalCow);
+                                } catch (e) {}
+                                if (mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '🎉 ${animal.name} başarıyla Düve kategorisine aktarıldı!',
+                                      ),
+                                      backgroundColor: AppColors.primaryGreen,
                                     ),
-                                    backgroundColor: AppColors.primaryGreen,
-                                  ),
-                                );
+                                  );
+                                }
                               },
                             ),
                           ),
@@ -915,7 +862,6 @@ class _HealthViewState extends State<HealthView> {
     );
   }
 
-  // Ortak Buton Widget'ı
   Widget _buildActionButton(
     IconData icon,
     String label,
@@ -945,7 +891,6 @@ class _HealthViewState extends State<HealthView> {
     );
   }
 
-  // --- UI WIDGETLARI ---
   InputDecoration _premiumInputDeco(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
@@ -1085,239 +1030,297 @@ class _HealthViewState extends State<HealthView> {
     );
   }
 
+  // YENİ: BÜTÜN SAYFAYI RIVERPOD İLE SARIYORUZ
   @override
   Widget build(BuildContext context) {
+    final cowAsync = ref.watch(cowProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: InkWell(
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Kamera tarayıcı aktif ediliyor...'),
-                ),
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  gradient: AppColors.greenGradient,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: AppColors.black, width: 3),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppColors.white.withOpacity(0.2),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.qr_code_scanner_rounded,
-                        color: AppColors.white,
-                        size: 26,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Kamerayla Küpe / Barkod Oku',
-                      style: TextStyle(
-                        color: AppColors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Comfortaa',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+      body: cowAsync.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryGreen),
+        ),
+        error: (err, stack) => Center(child: Text('Bir hata oluştu: $err')),
+        data: (liveCows) {
+          // 1. Canlı verileri arayüzün anladığı HealthCow formatına çevir
+          final mappedAnimals = liveCows.map((c) {
+            String status = 'Sağlıklı';
+            if (c.category == 'Hamile İnekler')
+              status = 'Hamile';
+            else if (c.chronicDisease != 'Yok' && c.chronicDisease.isNotEmpty)
+              status = 'Hasta';
 
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: SizedBox(
-              height: 55,
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (val) => setState(() => _searchQuery = val),
-                decoration: InputDecoration(
-                  hintText: 'Küpe No veya İsim ile ara...',
-                  prefixIcon: const Icon(
-                    Icons.search_rounded,
-                    color: AppColors.black,
-                  ),
-                  filled: true,
-                  fillColor: AppColors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(
-                      color: AppColors.black,
-                      width: 2,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(20),
-                    borderSide: const BorderSide(
-                      color: AppColors.primaryGreen,
-                      width: 2.5,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+            return HealthCow(
+              id: c.id,
+              tagNumber: c.tagNumber,
+              name: c.name,
+              mainCategory: c.category,
+              healthStatus: status,
+              diseaseName: status == 'Hasta' ? c.chronicDisease : null,
+              treatments: [],
+            );
+          }).toList();
 
-          Container(
-            height: 65,
-            padding: const EdgeInsets.only(top: 8, bottom: 8, left: 16),
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: _categories.length,
-              itemBuilder: (context, index) {
-                final isSelected = _selectedCategory == _categories[index];
-                return GestureDetector(
-                  onTap: () =>
-                      setState(() => _selectedCategory = _categories[index]),
+          // 2. Filtreleme ve Arama işlemleri
+          final finalAnimals = mappedAnimals.where((animal) {
+            final matchesSearch =
+                animal.tagNumber.toLowerCase().contains(
+                  _searchQuery.toLowerCase(),
+                ) ||
+                animal.name.toLowerCase().contains(_searchQuery.toLowerCase());
+            if (!matchesSearch) return false;
+
+            if (_selectedCategory == 'Tümü') return true;
+            if (_selectedCategory == 'Hasta Olan Hayvanlar')
+              return animal.healthStatus == 'Hasta';
+            if (_selectedCategory == 'Hamile İnekler')
+              return animal.healthStatus == 'Hamile';
+            if (_selectedCategory == 'Buzağılar')
+              return animal.mainCategory == 'Buzağılar';
+            if (_selectedCategory == 'Danalar')
+              return animal.mainCategory == 'Danalar';
+            if (_selectedCategory == 'Düveler')
+              return animal.mainCategory == 'Düveler';
+            return true;
+          }).toList();
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: InkWell(
+                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Kamera tarayıcı aktif ediliyor...'),
+                    ),
+                  ),
                   child: Container(
-                    margin: const EdgeInsets.only(right: 10),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 10,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.black : AppColors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: AppColors.black, width: 2),
+                      gradient: AppColors.greenGradient,
+                      borderRadius: BorderRadius.circular(25),
+                      border: Border.all(color: AppColors.black, width: 3),
                     ),
-                    child: Center(
-                      child: Text(
-                        _categories[index],
-                        style: TextStyle(
-                          color: isSelected ? AppColors.white : AppColors.black,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.qr_code_scanner_rounded,
+                            color: AppColors.white,
+                            size: 26,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Kamerayla Küpe / Barkod Oku',
+                          style: TextStyle(
+                            color: AppColors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Comfortaa',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                child: SizedBox(
+                  height: 55,
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (val) => setState(() => _searchQuery = val),
+                    decoration: InputDecoration(
+                      hintText: 'Küpe No veya İsim ile ara...',
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: AppColors.black,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.white,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: const BorderSide(
+                          color: AppColors.black,
+                          width: 2,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: const BorderSide(
+                          color: AppColors.primaryGreen,
+                          width: 2.5,
                         ),
                       ),
                     ),
                   ),
-                );
-              },
-            ),
-          ),
+                ),
+              ),
 
-          Expanded(
-            child: _filteredAnimals.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Aradığınız kriterde bir hayvan kaydı bulunamadı.',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
+              Container(
+                height: 65,
+                padding: const EdgeInsets.only(top: 8, bottom: 8, left: 16),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _categories.length,
+                  itemBuilder: (context, index) {
+                    final isSelected = _selectedCategory == _categories[index];
+                    return GestureDetector(
+                      onTap: () => setState(
+                        () => _selectedCategory = _categories[index],
                       ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredAnimals.length,
-                    itemBuilder: (context, index) {
-                      final animal = _filteredAnimals[index];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 14),
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: AppColors.black,
-                            width: 2.5,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Colors.black,
-                              blurRadius: 6,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
+                      child: Container(
+                        margin: const EdgeInsets.only(right: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 10,
                         ),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.black : AppColors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: AppColors.black, width: 2),
+                        ),
+                        child: Center(
+                          child: Text(
+                            _categories[index],
+                            style: TextStyle(
+                              color: isSelected
+                                  ? AppColors.white
+                                  : AppColors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
                           ),
-                          leading: InkWell(
-                            onTap: animal.healthStatus == 'Sağlıklı'
-                                ? () => _showDiseaseForm(animal, null)
-                                : null,
-                            child: Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: animal.healthStatus == 'Hasta'
-                                    ? AppColors.barnRed.withOpacity(0.15)
-                                    : (animal.healthStatus == 'Hamile'
-                                          ? AppColors.secondaryPink.withOpacity(
-                                              0.15,
-                                            )
-                                          : AppColors.primaryGreen.withOpacity(
-                                              0.15,
-                                            )),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppColors.black,
-                                  width: 1.5,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              Expanded(
+                child: finalAnimals.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'Aradığınız kriterde bir hayvan kaydı bulunamadı.',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: finalAnimals.length,
+                        itemBuilder: (context, index) {
+                          final animal = finalAnimals[index];
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 14),
+                            decoration: BoxDecoration(
+                              color: AppColors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: AppColors.black,
+                                width: 2.5,
+                              ),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black,
+                                  blurRadius: 6,
+                                  offset: Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              leading: InkWell(
+                                onTap: animal.healthStatus == 'Sağlıklı'
+                                    ? () => _showDiseaseForm(animal, null)
+                                    : null,
+                                child: Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: animal.healthStatus == 'Hasta'
+                                        ? AppColors.barnRed.withOpacity(0.15)
+                                        : (animal.healthStatus == 'Hamile'
+                                              ? AppColors.secondaryPink
+                                                    .withOpacity(0.15)
+                                              : AppColors.primaryGreen
+                                                    .withOpacity(0.15)),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: AppColors.black,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Icon(
+                                    animal.healthStatus == 'Hasta'
+                                        ? Icons.sick_rounded
+                                        : (animal.healthStatus == 'Hamile'
+                                              ? Icons.calendar_today_rounded
+                                              : Icons
+                                                    .health_and_safety_rounded),
+                                    color: animal.healthStatus == 'Hasta'
+                                        ? AppColors.barnRed
+                                        : (animal.healthStatus == 'Hamile'
+                                              ? AppColors.secondaryPink
+                                              : AppColors.primaryGreen),
+                                  ),
                                 ),
                               ),
-                              child: Icon(
-                                animal.healthStatus == 'Hasta'
-                                    ? Icons.sick_rounded
-                                    : (animal.healthStatus == 'Hamile'
-                                          ? Icons.calendar_today_rounded
-                                          : Icons.health_and_safety_rounded),
-                                color: animal.healthStatus == 'Hasta'
-                                    ? AppColors.barnRed
-                                    : (animal.healthStatus == 'Hamile'
-                                          ? AppColors.secondaryPink
-                                          : AppColors.primaryGreen),
+                              title: Text(
+                                animal.tagNumber,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
                               ),
-                            ),
-                          ),
-                          title: Text(
-                            animal.tagNumber,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 17,
-                            ),
-                          ),
-                          subtitle: Text(
-                            '${animal.name} • ${animal.mainCategory}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.black.withOpacity(0.5),
-                            ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildStatusBadge(animal.healthStatus),
-                              const SizedBox(width: 6),
-                              const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                size: 16,
-                                color: AppColors.black,
+                              subtitle: Text(
+                                '${animal.name} • ${animal.mainCategory}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.black.withOpacity(0.5),
+                                ),
                               ),
-                            ],
-                          ),
-                          onTap: () => _showAnimalHealthDetails(animal),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildStatusBadge(animal.healthStatus),
+                                  const SizedBox(width: 6),
+                                  const Icon(
+                                    Icons.arrow_forward_ios_rounded,
+                                    size: 16,
+                                    color: AppColors.black,
+                                  ),
+                                ],
+                              ),
+                              onTap: () => _showAnimalHealthDetails(animal),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
