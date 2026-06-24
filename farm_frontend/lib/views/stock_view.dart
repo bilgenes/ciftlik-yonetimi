@@ -1,85 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_colors.dart';
 import '../core/ui_helper.dart';
+import '../providers/stock_provider.dart';
 
-// --- STOK VERİ MODELLERİ ---
-class StockTransaction {
-  String id;
-  String productName; // Süt, Yem, Saman, Silaj
-  double amount;
-  String unit; // Litre, Kg, Ton, Balya
-  double cost; // Maliyet (Finansa Düşecek)
-  DateTime date;
-  String type; // 'Alım', 'Üretim', 'Tüketim'
-
-  StockTransaction({
-    required this.id,
-    required this.productName,
-    required this.amount,
-    required this.unit,
-    required this.cost,
-    required this.date,
-    required this.type,
-  });
-}
-
-class StockView extends StatefulWidget {
+class StockView extends ConsumerStatefulWidget {
   const StockView({super.key});
 
   @override
-  State<StockView> createState() => _StockViewState();
+  ConsumerState<StockView> createState() => _StockViewState();
 }
 
-class _StockViewState extends State<StockView> {
-  // --- MEVCUT STOKLAR (Kg, Litre, Balya cinsinden tutulur) ---
-  final Map<String, double> _currentStocks = {
-    'Süt': 850.0, // Litre
-    'Yem': 2500.0, // Kg
-    'Saman': 120.0, // Balya
-    'Silaj': 5200.0, // Kg
-  };
-
-  // --- GEÇMİŞ İŞLEMLER MOCK VERİSİ ---
-  final List<StockTransaction> _transactions = [
-    StockTransaction(
-      id: '1',
-      productName: 'Yem',
-      amount: 1500,
-      unit: 'Kg',
-      cost: 12000,
-      date: DateTime.now().subtract(const Duration(days: 2)),
-      type: 'Alım',
-    ),
-    StockTransaction(
-      id: '2',
-      productName: 'Saman',
-      amount: 50,
-      unit: 'Balya',
-      cost: 2500,
-      date: DateTime.now().subtract(const Duration(days: 5)),
-      type: 'Alım',
-    ),
-    StockTransaction(
-      id: '3',
-      productName: 'Silaj',
-      amount: 3,
-      unit: 'Ton',
-      cost: 9000,
-      date: DateTime.now().subtract(const Duration(days: 10)),
-      type: 'Alım',
-    ),
-    StockTransaction(
-      id: '4',
-      productName: 'Süt',
-      amount: 450,
-      unit: 'Litre',
-      cost: 0,
-      date: DateTime.now().subtract(const Duration(days: 1)),
-      type: 'Üretim',
-    ),
-  ];
-
+class _StockViewState extends ConsumerState<StockView> {
   // --- BİRİM VE TON/KG DÖNÜŞÜM YARDIMCISI ---
   String _formatStockDisplay(String product, double amount) {
     if (product == 'Süt') return '${amount.toStringAsFixed(0)} Litre';
@@ -98,8 +31,8 @@ class _StockViewState extends State<StockView> {
     final amountCtrl = TextEditingController();
     final costCtrl = TextEditingController();
     String selectedProduct = 'Yem';
-    String selectedUnit = 'Kg'; // Süt->Litre, Saman->Balya, Yem/Silaj->Kg/Ton
-    String transactionType = 'Alım'; // Alım (Gider) veya Üretim (Bedelsiz)
+    String selectedUnit = 'Kg';
+    String transactionType = 'Alım';
 
     UiHelper.showPremiumBottomSheet(
       context: context,
@@ -109,10 +42,10 @@ class _StockViewState extends State<StockView> {
           List<String> availableUnits = ['Kg', 'Ton'];
           if (selectedProduct == 'Süt') availableUnits = ['Litre'];
           if (selectedProduct == 'Saman') availableUnits = ['Balya'];
-          if (!availableUnits.contains(selectedUnit))
+          if (!availableUnits.contains(selectedUnit)) {
             selectedUnit = availableUnits.first;
+          }
 
-          // Eğer üretimse maliyet 0'dır
           if (transactionType == 'Üretim') costCtrl.text = '0';
 
           return Container(
@@ -121,7 +54,6 @@ class _StockViewState extends State<StockView> {
               top: 24,
               left: 24,
               right: 24,
-              // KESİN ÇÖZÜM: Klavye yüksekliği + Telefon alt çubuğu
               bottom:
                   MediaQuery.of(context).viewInsets.bottom +
                   MediaQuery.of(context).padding.bottom +
@@ -162,12 +94,10 @@ class _StockViewState extends State<StockView> {
                 ),
                 const SizedBox(height: 20),
 
-                // KAYDIRILABİLİR İÇERİK ALANI
                 Expanded(
                   child: SingleChildScrollView(
                     child: Column(
                       children: [
-                        // İşlem Türü (Alım vs Üretim)
                         Row(
                           children: [
                             Expanded(
@@ -193,7 +123,6 @@ class _StockViewState extends State<StockView> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Ürün Seçimi
                         DropdownButtonFormField<String>(
                           value: selectedProduct,
                           decoration: _premiumInputDeco(
@@ -218,7 +147,6 @@ class _StockViewState extends State<StockView> {
                         ),
                         const SizedBox(height: 15),
 
-                        // Miktar ve Birim Yan Yana
                         Row(
                           children: [
                             Expanded(
@@ -262,7 +190,6 @@ class _StockViewState extends State<StockView> {
                         ),
                         const SizedBox(height: 15),
 
-                        // Maliyet (Eğer alım ise)
                         if (transactionType == 'Alım')
                           TextField(
                             controller: costCtrl,
@@ -278,7 +205,6 @@ class _StockViewState extends State<StockView> {
                   ),
                 ),
 
-                // SABİT BUTON İÇİN BEYAZLIK VE KORUMA BÖLGESİ
                 const Divider(color: AppColors.black, thickness: 2, height: 30),
                 SizedBox(
                   width: double.infinity,
@@ -294,44 +220,32 @@ class _StockViewState extends State<StockView> {
                         ),
                       ),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       if (amountCtrl.text.isNotEmpty) {
                         double amount = double.tryParse(amountCtrl.text) ?? 0;
                         double cost = double.tryParse(costCtrl.text) ?? 0;
 
-                        // Ton girildiyse arka planda Kg olarak kaydet
                         double saveAmount = amount;
                         if (selectedUnit == 'Ton') saveAmount = amount * 1000;
 
-                        setState(() {
-                          // Stoğa ekle
-                          _currentStocks[selectedProduct] =
-                              (_currentStocks[selectedProduct] ?? 0) +
-                              saveAmount;
-                          // Geçmişe yaz
-                          _transactions.insert(
-                            0,
-                            StockTransaction(
-                              id: DateTime.now().millisecondsSinceEpoch
-                                  .toString(),
-                              productName: selectedProduct,
-                              amount: amount,
-                              unit: selectedUnit,
-                              cost: cost,
-                              date: DateTime.now(),
-                              type: transactionType,
+                        // API'ye İstek Atıyoruz
+                        final success = await ref
+                            .read(stockProvider.notifier)
+                            .addStock(
+                              itemName: selectedProduct,
+                              quantity: saveAmount,
+                              price: transactionType == 'Üretim' ? 0 : cost,
+                            );
+
+                        if (mounted && success) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('✅ Stok eklendi.'),
+                              backgroundColor: AppColors.primaryGreen,
                             ),
                           );
-                        });
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              '✅ Stok başarıyla eklendi, maliyet finansa yansıtıldı!',
-                            ),
-                            backgroundColor: AppColors.primaryGreen,
-                          ),
-                        );
+                        }
                       }
                     },
                     child: const Text(
@@ -398,7 +312,6 @@ class _StockViewState extends State<StockView> {
     );
   }
 
-  // --- STOK KARTI TASARIMI ---
   Widget _buildStockCard(
     String title,
     double amount,
@@ -452,6 +365,8 @@ class _StockViewState extends State<StockView> {
 
   @override
   Widget build(BuildContext context) {
+    final stockAsyncValue = ref.watch(stockProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton.extended(
@@ -474,211 +389,223 @@ class _StockViewState extends State<StockView> {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // BAŞLIK
-          const Text(
-            'Güncel Depo',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: AppColors.black,
-              fontFamily: 'Comfortaa',
-            ),
-          ),
-          Text(
-            'Depodaki varlıkların ve tüketim tahmini.',
-            style: TextStyle(
-              fontSize: 15,
-              color: AppColors.black.withOpacity(0.6),
-            ),
-          ),
-          const SizedBox(height: 20),
+      body: stockAsyncValue.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryGreen),
+        ),
+        error: (err, stack) => Center(child: Text('Hata: $err')),
+        data: (stockData) {
+          final stocks = stockData.currentStocks;
+          final txs = stockData.transactions;
 
-          // 4'LÜ STOK KARTLARI (GRID)
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 15,
-            crossAxisSpacing: 15,
-            childAspectRatio: 1.1,
+          return ListView(
+            padding: const EdgeInsets.all(20),
             children: [
-              _buildStockCard(
-                'Süt',
-                _currentStocks['Süt']!,
-                AppColors.blackGradient,
-                Icons.water_drop_rounded,
-              ),
-              _buildStockCard(
-                'Yem',
-                _currentStocks['Yem']!,
-                AppColors.yellowGradient,
-                Icons.inventory_2_rounded,
-              ),
-              _buildStockCard(
-                'Saman',
-                _currentStocks['Saman']!,
-                AppColors.redGradient,
-                Icons.grass_rounded,
-              ),
-              _buildStockCard(
-                'Silaj',
-                _currentStocks['Silaj']!,
-                AppColors.greenGradient,
-                Icons.eco_rounded,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 35),
-
-          // GEÇMİŞ İŞLEMLER BAŞLIĞI
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: AppColors.strawYellow,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(width: 10),
               const Text(
-                'Geçmiş Alım ve Hareketler',
+                'Güncel Depo',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: AppColors.black,
                   fontFamily: 'Comfortaa',
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 15),
+              Text(
+                'Depodaki varlıkların ve tüketim tahmini.',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: AppColors.black.withOpacity(0.6),
+                ),
+              ),
+              const SizedBox(height: 20),
 
-          // İŞLEM GEÇMİŞİ LİSTESİ
-          ..._transactions
-              .map(
-                (t) => Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.black, width: 2),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                mainAxisSpacing: 15,
+                crossAxisSpacing: 15,
+                childAspectRatio: 1.1,
+                children: [
+                  _buildStockCard(
+                    'Süt',
+                    stocks['Süt'] ?? 0,
+                    AppColors.blackGradient,
+                    Icons.water_drop_rounded,
                   ),
-                  child: Row(
-                    children: [
-                      // İkon
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: t.type == 'Alım'
-                              ? AppColors.barnRed.withOpacity(0.1)
-                              : AppColors.primaryGreen.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          t.type == 'Alım'
-                              ? Icons.shopping_cart_rounded
-                              : Icons.precision_manufacturing_rounded,
-                          color: t.type == 'Alım'
-                              ? AppColors.barnRed
-                              : AppColors.primaryGreen,
-                        ),
-                      ),
-                      const SizedBox(width: 15),
+                  _buildStockCard(
+                    'Yem',
+                    stocks['Yem'] ?? 0,
+                    AppColors.yellowGradient,
+                    Icons.inventory_2_rounded,
+                  ),
+                  _buildStockCard(
+                    'Saman',
+                    stocks['Saman'] ?? 0,
+                    AppColors.redGradient,
+                    Icons.grass_rounded,
+                  ),
+                  _buildStockCard(
+                    'Silaj',
+                    stocks['Silaj'] ?? 0,
+                    AppColors.greenGradient,
+                    Icons.eco_rounded,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 35),
 
-                      // Detaylar
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppColors.strawYellow,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Geçmiş Alım ve Hareketler',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                      fontFamily: 'Comfortaa',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+
+              if (txs.isEmpty)
+                const Center(
+                  child: Text(
+                    'Henüz işlem kaydedilmemiş.',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+
+              ...txs
+                  .map(
+                    (t) => Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.black, width: 2),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: t.cost > 0
+                                  ? AppColors.barnRed.withOpacity(0.1)
+                                  : AppColors.primaryGreen.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              t.cost > 0
+                                  ? Icons.shopping_cart_rounded
+                                  : Icons.precision_manufacturing_rounded,
+                              color: t.cost > 0
+                                  ? AppColors.barnRed
+                                  : AppColors.primaryGreen,
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  t.productName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                    color: AppColors.black,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.black,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    t.type,
-                                    style: const TextStyle(
-                                      color: AppColors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
+                                Row(
+                                  children: [
+                                    Text(
+                                      t.productName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                        color: AppColors.black,
+                                      ),
                                     ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.black,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        t.type,
+                                        style: const TextStyle(
+                                          color: AppColors.white,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${DateFormat('dd MMM yyyy', 'tr_TR').format(t.date)} • ${t.amount} ${t.unit}',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.black.withOpacity(0.5),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateFormat('dd MMM yyyy', 'tr_TR').format(t.date)} • ${t.amount} ${t.unit}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.black.withOpacity(0.5),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // Fiyat
-                      if (t.cost > 0)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            const Text(
-                              'Maliyet',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '₺${t.cost.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18,
-                                color: AppColors.barnRed,
-                              ),
-                            ),
-                          ],
-                        )
-                      else
-                        const Text(
-                          'Bedelsiz',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryGreen,
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
+                          if (t.cost > 0)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text(
+                                  'Maliyet',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  '₺${t.cost.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                    color: AppColors.barnRed,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            const Text(
+                              'Bedelsiz',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryGreen,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
 
-          const SizedBox(height: 80), // FAB Butonu üstüne binmesin diye boşluk
-        ],
+              const SizedBox(height: 80),
+            ],
+          );
+        },
       ),
     );
   }
