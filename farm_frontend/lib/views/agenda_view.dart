@@ -1,83 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../core/app_colors.dart';
+import '../providers/agenda_provider.dart';
 
-class AgendaEvent {
-  final String title;
-  final String type; // 'not', 'sistem', 'hedef'
-  final Color color;
-  final IconData icon;
-
-  AgendaEvent(this.title, this.type, this.color, this.icon);
-}
-
-class Goal {
-  final String title;
-  final DateTime? deadline;
-  bool isCompleted;
-
-  Goal(this.title, this.deadline, this.isCompleted);
-}
-
-class AgendaView extends StatefulWidget {
+// Riverpod ConsumerStatefulWidget entegrasyonu
+class AgendaView extends ConsumerStatefulWidget {
   const AgendaView({super.key});
 
   @override
-  State<AgendaView> createState() => _AgendaViewState();
+  ConsumerState<AgendaView> createState() => _AgendaViewState();
 }
 
-class _AgendaViewState extends State<AgendaView> {
+class _AgendaViewState extends ConsumerState<AgendaView> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   CalendarFormat _calendarFormat = CalendarFormat.month;
-
-  // Çiftlik Canlılığındaki Olay Listesi
-  final Map<DateTime, List<AgendaEvent>> _events = {
-    DateTime.now(): [
-      AgendaEvent(
-        'TR1234 kodlu Sarıkız tahmini doğum yapacak! 🐮',
-        'sistem',
-        AppColors.secondaryPink,
-        Icons.child_care_rounded,
-      ),
-    ],
-    DateTime.now().add(const Duration(days: 1)): [
-      AgendaEvent(
-        'Saman ambarı havalandırma kontrolü. 🌾',
-        'not',
-        AppColors.black,
-        Icons.wb_sunny_rounded,
-      ),
-      AgendaEvent(
-        'Güneydoğu çitlerini ahır kırmızısına boya.',
-        'hedef',
-        AppColors.barnRed,
-        Icons.colorize_rounded,
-      ),
-    ],
-    DateTime.now().add(const Duration(days: 3)): [
-      AgendaEvent(
-        'Buzağınız 2.5 aylık oldu! Sütten kesme vakti. 🥛',
-        'sistem',
-        AppColors.primaryGreen,
-        Icons.grass_rounded,
-      ),
-    ],
-  };
-
-  final List<Goal> _goals = [
-    Goal(
-      'Süt verimini günlük 500L üzerine çıkar 📈',
-      DateTime.now().add(const Duration(days: 15)),
-      false,
-    ),
-    Goal(
-      'Sol koridor zeminini yenile 🛠️',
-      DateTime.now().add(const Duration(days: 5)),
-      false,
-    ),
-    Goal('Bahar aşılarını eksiksiz tamamla 💉', null, true),
-  ];
 
   @override
   void initState() {
@@ -85,13 +24,27 @@ class _AgendaViewState extends State<AgendaView> {
     _selectedDay = _focusedDay;
   }
 
-  List<AgendaEvent> _getEventsForDay(DateTime day) {
-    for (var date in _events.keys) {
-      if (isSameDay(date, day)) {
-        return _events[date]!;
-      }
-    }
-    return [];
+  // Tiplere göre ikon ve renk ataması
+  Color _getColorForType(String type) {
+    if (type == 'hedef') return AppColors.barnRed;
+    if (type == 'sistem') return AppColors.secondaryPink;
+    if (type == 'not') return AppColors.black;
+    return AppColors.primaryGreen;
+  }
+
+  IconData _getIconForType(String type) {
+    if (type == 'hedef') return Icons.colorize_rounded;
+    if (type == 'sistem') return Icons.child_care_rounded;
+    if (type == 'not') return Icons.edit_note_rounded;
+    return Icons.event;
+  }
+
+  // Belirli bir günün olaylarını listeler
+  List<AgendaEventModel> _getEventsForDay(
+    DateTime day,
+    List<AgendaEventModel> allEvents,
+  ) {
+    return allEvents.where((event) => isSameDay(event.date, day)).toList();
   }
 
   // --- POPUP: NOT EKLEME PENCERESİ ---
@@ -144,20 +97,23 @@ class _AgendaViewState extends State<AgendaView> {
                 borderRadius: BorderRadius.circular(15),
               ),
             ),
-            onPressed: () {
-              if (titleController.text.isNotEmpty) {
-                setState(() {
-                  _events[_selectedDay!] ??= [];
-                  _events[_selectedDay!]!.add(
-                    AgendaEvent(
-                      titleController.text,
-                      'not',
-                      AppColors.black,
-                      Icons.edit_note_rounded,
-                    ),
-                  );
-                });
-                Navigator.pop(context);
+            onPressed: () async {
+              if (titleController.text.isNotEmpty && _selectedDay != null) {
+                // Provider üzerinden backend'e gönder
+                final success = await ref
+                    .read(agendaProvider.notifier)
+                    .addEvent(titleController.text, 'not', _selectedDay!);
+                if (mounted) {
+                  Navigator.pop(context);
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Not Eklendi!'),
+                        backgroundColor: AppColors.primaryGreen,
+                      ),
+                    );
+                  }
+                }
               }
             },
             child: const Text(
@@ -223,28 +179,32 @@ class _AgendaViewState extends State<AgendaView> {
                 side: const BorderSide(color: AppColors.black, width: 2),
               ),
             ),
-            onPressed: () {
+            onPressed: () async {
               if (titleController.text.isNotEmpty) {
-                setState(() {
-                  _goals.add(
-                    Goal(
-                      titleController.text,
-                      DateTime.now().add(const Duration(days: 7)),
-                      false,
-                    ),
-                  );
-                  // Takvime de sarı hedef ikonu olarak fırlatıyoruz
-                  _events[_selectedDay!] ??= [];
-                  _events[_selectedDay!]!.add(
-                    AgendaEvent(
-                      titleController.text,
-                      'hedef',
-                      AppColors.strawYellow,
-                      Icons.flag_rounded,
-                    ),
-                  );
-                });
-                Navigator.pop(context);
+                // 1 hafta sonrası için deadline veriyoruz
+                final deadline = DateTime.now().add(const Duration(days: 7));
+                final success = await ref
+                    .read(agendaProvider.notifier)
+                    .addGoal(titleController.text, deadline);
+
+                // Hedefi aynı zamanda bugüne not olarak da takvime atıyoruz
+                if (_selectedDay != null) {
+                  await ref
+                      .read(agendaProvider.notifier)
+                      .addEvent(titleController.text, 'hedef', _selectedDay!);
+                }
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Hedef Kaydedildi!'),
+                        backgroundColor: AppColors.primaryGreen,
+                      ),
+                    );
+                  }
+                }
               }
             },
             child: const Text(
@@ -262,254 +222,275 @@ class _AgendaViewState extends State<AgendaView> {
 
   @override
   Widget build(BuildContext context) {
+    // Canlı Verileri İzliyoruz
+    final agendaAsyncValue = ref.watch(agendaProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // PREMIUM SİYAH-BEYAZ KESKİN HATLI VE CANLI İÇERİKLİ TAKVİM
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(35),
-              border: Border.all(
-                color: AppColors.black,
-                width: 3,
-              ), // Güçlü Premium Siyah Çerçeve
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 12,
-                  offset: Offset(0, 6),
-                ),
-              ],
-            ),
-            child: TableCalendar(
-              firstDay: DateTime.utc(2020, 1, 1),
-              lastDay: DateTime.utc(2030, 12, 31),
-              focusedDay: _focusedDay,
-              selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-              calendarFormat: _calendarFormat,
-              eventLoader: _getEventsForDay,
-              startingDayOfWeek: StartingDayOfWeek.monday,
-              rowHeight: 62,
+      body: agendaAsyncValue.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryGreen),
+        ),
+        error: (err, stack) => Center(child: Text('Hata oluştu: $err')),
+        data: (agendaData) {
+          final events = agendaData.events;
+          final goals = agendaData.goals;
 
-              headerStyle: const HeaderStyle(
-                formatButtonVisible: false,
-                titleCentered: true,
-                titleTextStyle: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.black,
-                  fontFamily: 'Comfortaa',
-                ),
-                leftChevronIcon: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: AppColors.black,
-                  size: 20,
-                ),
-                rightChevronIcon: Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: AppColors.black,
-                  size: 20,
-                ),
-              ),
-
-              calendarStyle: CalendarStyle(
-                outsideDaysVisible: false,
-                defaultTextStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.black,
-                ),
-                weekendTextStyle: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.barnRed,
-                ),
-
-                // Bugünün kutusu (Çiftlik Yeşili Parlaması)
-                todayDecoration: BoxDecoration(
-                  color: AppColors.primaryGreen.withOpacity(0.15),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primaryGreen, width: 1.5),
-                ),
-                todayTextStyle: const TextStyle(
-                  color: AppColors.primaryGreen,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-
-                // Seçilen günün kutusu (Premium Siyah)
-                selectedDecoration: const BoxDecoration(
-                  color: AppColors.black,
-                  shape: BoxShape.circle,
-                ),
-                selectedTextStyle: const TextStyle(
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // PREMIUM TAKVİM
+              Container(
+                decoration: BoxDecoration(
                   color: AppColors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  borderRadius: BorderRadius.circular(35),
+                  border: Border.all(color: AppColors.black, width: 3),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 12,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
                 ),
-
-                // Olay bildirim noktaları
-                markerDecoration: const BoxDecoration(
-                  color: AppColors.barnRed,
-                  shape: BoxShape.circle,
-                ),
-                markersMaxCount: 3,
-              ),
-              onDaySelected: (selectedDay, focusedDay) {
-                setState(() {
-                  _selectedDay = selectedDay;
-                  _focusedDay = focusedDay;
-                });
-              },
-              onFormatChanged: (format) =>
-                  setState(() => _calendarFormat = format),
-            ),
-          ),
-
-          const SizedBox(height: 25),
-
-          // AKSİYON BUTONLARI (KÖY CANLILIĞI)
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: _showAddNoteDialog,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
+                child: TableCalendar<AgendaEventModel>(
+                  firstDay: DateTime.utc(2020, 1, 1),
+                  lastDay: DateTime.utc(2030, 12, 31),
+                  focusedDay: _focusedDay,
+                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                  calendarFormat: _calendarFormat,
+                  eventLoader: (day) => _getEventsForDay(day, events),
+                  startingDayOfWeek: StartingDayOfWeek.monday,
+                  rowHeight: 62,
+                  headerStyle: const HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    titleTextStyle: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                      fontFamily: 'Comfortaa',
+                    ),
+                    leftChevronIcon: Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: AppColors.black,
+                      size: 20,
+                    ),
+                    rightChevronIcon: Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: AppColors.black,
+                      size: 20,
+                    ),
+                  ),
+                  calendarStyle: CalendarStyle(
+                    outsideDaysVisible: false,
+                    defaultTextStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                    ),
+                    weekendTextStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.barnRed,
+                    ),
+                    todayDecoration: BoxDecoration(
+                      color: AppColors.primaryGreen.withOpacity(0.15),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: AppColors.primaryGreen,
+                        width: 1.5,
+                      ),
+                    ),
+                    todayTextStyle: const TextStyle(
+                      color: AppColors.primaryGreen,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                    selectedDecoration: const BoxDecoration(
+                      color: AppColors.black,
+                      shape: BoxShape.circle,
+                    ),
+                    selectedTextStyle: const TextStyle(
                       color: AppColors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: AppColors.black, width: 2.5),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black, blurRadius: 8),
-                      ],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(
-                          Icons.edit_note_rounded,
-                          color: AppColors.black,
-                          size: 26,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Not Ekle',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: AppColors.black,
-                          ),
-                        ),
-                      ],
+                    markerDecoration: const BoxDecoration(
+                      color: AppColors.barnRed,
+                      shape: BoxShape.circle,
                     ),
+                    markersMaxCount: 3,
                   ),
+                  onDaySelected: (selectedDay, focusedDay) {
+                    setState(() {
+                      _selectedDay = selectedDay;
+                      _focusedDay = focusedDay;
+                    });
+                  },
+                  onFormatChanged: (format) =>
+                      setState(() => _calendarFormat = format),
                 ),
               ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: InkWell(
-                  onTap: _showAddGoalDialog,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+              const SizedBox(height: 25),
+
+              // AKSİYON BUTONLARI
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: _showAddNoteDialog,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: AppColors.black,
+                            width: 2.5,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black, blurRadius: 8),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(
+                              Icons.edit_note_rounded,
+                              color: AppColors.black,
+                              size: 26,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Not Ekle',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: AppColors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _showAddGoalDialog,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.yellowGradient,
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(
+                            color: AppColors.black,
+                            width: 2.5,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black12, blurRadius: 8),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(
+                              Icons.flag_rounded,
+                              color: AppColors.black,
+                              size: 24,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Hedef Koy',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: AppColors.black,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 35),
+
+              // GÜNÜN OLAYLARI BAŞLIĞI
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 24,
                     decoration: BoxDecoration(
-                      gradient: AppColors.yellowGradient,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: AppColors.black, width: 2.5),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black12, blurRadius: 8),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(
-                          Icons.flag_rounded,
-                          color: AppColors.black,
-                          size: 24,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Hedef Koy',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: AppColors.black,
-                          ),
-                        ),
-                      ],
+                      color: AppColors.barnRed,
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${_selectedDay!.day}/${_selectedDay!.month} Gündemi',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                      fontFamily: 'Comfortaa',
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 15),
+              ..._buildEventList(_getEventsForDay(_selectedDay!, events)),
+
+              const SizedBox(height: 35),
+
+              // HEDEFLERİM BAŞLIĞI
+              Row(
+                children: [
+                  Container(
+                    width: 6,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: AppColors.strawYellow,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text(
+                    'Büyük Hedefler',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                      fontFamily: 'Comfortaa',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              goals.isEmpty
+                  ? const Text(
+                      'Henüz belirlenmiş bir hedef yok.',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : Column(
+                      children: goals
+                          .map((goal) => _buildGoalCard(goal))
+                          .toList(),
+                    ),
+              const SizedBox(height: 40),
             ],
-          ),
-
-          const SizedBox(height: 35),
-
-          // GÜNÜN OLAYLARI BAŞLIĞI
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: AppColors.barnRed,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '${_selectedDay!.day}/${_selectedDay!.month} Gündemi',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.black,
-                  fontFamily: 'Comfortaa',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          ..._buildEventList(),
-
-          const SizedBox(height: 35),
-
-          // HEDEFLERİM BAŞLIĞI
-          Row(
-            children: [
-              Container(
-                width: 6,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: AppColors.strawYellow,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text(
-                'Büyük Hedefler',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.black,
-                  fontFamily: 'Comfortaa',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          ..._goals.map((goal) => _buildGoalCard(goal)).toList(),
-          const SizedBox(height: 40),
-        ],
+          );
+        },
       ),
     );
   }
 
-  List<Widget> _buildEventList() {
-    final events = _getEventsForDay(_selectedDay!);
-    if (events.isEmpty) {
+  List<Widget> _buildEventList(List<AgendaEventModel> dayEvents) {
+    if (dayEvents.isEmpty) {
       return [
         Container(
           padding: const EdgeInsets.all(24),
@@ -527,55 +508,53 @@ class _AgendaViewState extends State<AgendaView> {
       ];
     }
 
-    return events
-        .map(
-          (event) => Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: AppColors.black,
-                width: 2.5,
-              ), // Kalın premium çerçeve
-              boxShadow: [
-                BoxShadow(
-                  color: event.color.withOpacity(0.15),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+    return dayEvents.map((event) {
+      final color = _getColorForType(event.type);
+      final icon = _getIconForType(event.type);
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: AppColors.black, width: 2.5),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: event.color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(event.icon, color: event.color, size: 26),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.black,
-                    ),
-                  ),
-                ),
-              ],
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 26),
             ),
-          ),
-        )
-        .toList();
+            const SizedBox(width: 15),
+            Expanded(
+              child: Text(
+                event.title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }).toList();
   }
 
-  Widget _buildGoalCard(Goal goal) {
+  Widget _buildGoalCard(GoalModel goal) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -587,7 +566,7 @@ class _AgendaViewState extends State<AgendaView> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         leading: InkWell(
-          onTap: () => setState(() => goal.isCompleted = !goal.isCompleted),
+          onTap: () => ref.read(agendaProvider.notifier).toggleGoal(goal),
           child: Container(
             width: 26,
             height: 26,

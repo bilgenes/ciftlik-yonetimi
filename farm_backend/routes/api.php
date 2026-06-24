@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\HealthRecordController;
 use App\Http\Controllers\Api\DailyLogController;
 use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\StockController;
+use App\Http\Controllers\Api\AgendaController;
 
 // --------------------------------------------------------
 // DIŞARIYA AÇIK ROTALAR (Token Gerektirmeyenler)
@@ -23,6 +24,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // İnekler
     Route::get('cows/by-tag/{tag}', [CowController::class, 'getByTag']);
     Route::apiResource('cows', CowController::class);
+
+    // --- AJANDA VE HEDEFLER ---
+    Route::get('agenda/events', [AgendaController::class, 'getEvents']);
+    Route::post('agenda/events', [AgendaController::class, 'storeEvent']);
+    Route::get('agenda/goals', [AgendaController::class, 'getGoals']);
+    Route::post('agenda/goals', [AgendaController::class, 'storeGoal']);
+    Route::put('agenda/goals/{id}/toggle', [AgendaController::class, 'toggleGoal']);
 
     // Günlük Kayıtlar
     Route::get('daily-logs/last', [DailyLogController::class, 'getLastLog']);

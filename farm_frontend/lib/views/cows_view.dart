@@ -319,7 +319,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
 
                           if (isEditing) {
                             // --- GÜNCELLEME (PUT) İŞLEMİ ---
-                            cowToEdit!.tagNumber = tagCtrl.text;
+                            cowToEdit.tagNumber = tagCtrl.text;
                             cowToEdit.name = nameCtrl.text.isEmpty
                                 ? 'İsimsiz'
                                 : nameCtrl.text;
