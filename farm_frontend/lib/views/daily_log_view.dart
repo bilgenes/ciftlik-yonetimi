@@ -1,55 +1,66 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_colors.dart';
+import '../providers/daily_log_provider.dart';
 
-class DailyLogView extends StatefulWidget {
+// Riverpod entegrasyonu için ConsumerStatefulWidget yapıldı
+class DailyLogView extends ConsumerStatefulWidget {
   const DailyLogView({super.key});
 
   @override
-  State<DailyLogView> createState() => _DailyLogViewState();
+  ConsumerState<DailyLogView> createState() => _DailyLogViewState();
 }
 
-class _DailyLogViewState extends State<DailyLogView> {
-  // Veri Kontrolcüleri (Controllers)
+class _DailyLogViewState extends ConsumerState<DailyLogView> {
+  // Veri Kontrolcüleri
   final _milkCtrl = TextEditingController();
   final _feedCtrl = TextEditingController();
   final _strawCtrl = TextEditingController();
   final _silageCtrl = TextEditingController();
 
   bool _isLoading = false;
-  bool _isDataFetched = false; // "Son veriyi al" butonuna basıldı mı?
+  bool _isSaving = false;
+  bool _isDataFetched = false;
 
-  // --- SAHTE VERİ GETİRME (Backend'den En Son Girilen Gün Gelecek) ---
+  // --- CANLI VERİ GETİRME (Backend'den En Son Girilen Gün Gelecek) ---
   Future<void> _fetchLastLog() async {
     setState(() => _isLoading = true);
 
-    // Gerçekte API'ye gidip gelme süresi simülasyonu
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    setState(() {
-      // Örnek: Sistemdeki en son veriyi kutulara dolduruyoruz
-      _milkCtrl.text = '450';
-      _feedCtrl.text = '120';
-      _strawCtrl.text = '45';
-      _silageCtrl.text = '300';
-
-      _isDataFetched = true;
-      _isLoading = false;
-    });
+    final lastLog = await ref.read(dailyLogProvider).getLastLog();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Son girilen veriler başarıyla kopyalandı!'),
-          backgroundColor: AppColors.primaryGreen,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      setState(() => _isLoading = false);
+
+      if (lastLog != null) {
+        // Gelen JSON verilerini Controller'lara aktar
+        _milkCtrl.text = lastLog['milk_produced']?.toString() ?? '';
+        _feedCtrl.text = lastLog['feed_consumed']?.toString() ?? '';
+        _strawCtrl.text = lastLog['straw_consumed']?.toString() ?? '';
+        _silageCtrl.text = lastLog['silage_consumed']?.toString() ?? '';
+
+        setState(() => _isDataFetched = true);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Son girilen veriler başarıyla kopyalandı!'),
+            backgroundColor: AppColors.primaryGreen,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Geçmiş kayıt bulunamadı.'),
+            backgroundColor: AppColors.barnRed,
+          ),
+        );
+      }
     }
   }
 
-  // --- BUGÜNÜ KAYDETME ---
-  void _saveTodayLog() {
+  // --- BUGÜNÜ KAYDETME (API POST) ---
+  Future<void> _saveTodayLog() async {
     if (_milkCtrl.text.isEmpty ||
         _feedCtrl.text.isEmpty ||
         _strawCtrl.text.isEmpty ||
@@ -63,13 +74,41 @@ class _DailyLogViewState extends State<DailyLogView> {
       return;
     }
 
-    // TODO: Backend'e POST atılacak
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🎉 Günlük veriler başarıyla kaydedildi!'),
-        backgroundColor: AppColors.primaryGreen,
-      ),
-    );
+    setState(() => _isSaving = true);
+
+    // Laravel'in date kuralı için yyyy-MM-dd formatında tarih üretiyoruz
+    String dbDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    final success = await ref
+        .read(dailyLogProvider)
+        .saveTodayLog(
+          date: dbDate,
+          milk: double.tryParse(_milkCtrl.text) ?? 0.0,
+          feed: double.tryParse(_feedCtrl.text) ?? 0.0,
+          silage: double.tryParse(_silageCtrl.text) ?? 0.0,
+          straw: double.tryParse(_strawCtrl.text) ?? 0.0,
+        );
+
+    if (mounted) {
+      setState(() => _isSaving = false);
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Günlük veriler kaydedildi, stoktan düşüldü!'),
+            backgroundColor: AppColors.primaryGreen,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Kayıt başarısız! Bugünün verisi zaten girilmiş olabilir.',
+            ),
+            backgroundColor: AppColors.barnRed,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -122,7 +161,7 @@ class _DailyLogViewState extends State<DailyLogView> {
           ),
           const SizedBox(height: 25),
 
-          // AKILLI "SON VERİYİ AL" BUTONU (Saman Sarısı)
+          // AKILLI "SON VERİYİ AL" BUTONU
           InkWell(
             onTap: _isLoading ? null : _fetchLastLog,
             child: Container(
@@ -196,7 +235,7 @@ class _DailyLogViewState extends State<DailyLogView> {
           ),
           const SizedBox(height: 30),
 
-          // --- 1. KART: ÜRETİM (Yeşil Odaklı) ---
+          // 1. KART: ÜRETİM
           _buildSectionCard(
             title: 'Süt Üretimi',
             icon: Icons.water_drop_rounded,
@@ -211,7 +250,7 @@ class _DailyLogViewState extends State<DailyLogView> {
           ),
           const SizedBox(height: 25),
 
-          // --- 2. KART: TÜKETİM / MALİYET (Kırmızı Odaklı) ---
+          // 2. KART: TÜKETİM
           _buildSectionCard(
             title: 'Tüketim (Rasyon)',
             icon: Icons.inventory_2_rounded,
@@ -254,7 +293,7 @@ class _DailyLogViewState extends State<DailyLogView> {
           ),
           const SizedBox(height: 40),
 
-          // --- KAYDET BUTONU ---
+          // KAYDET BUTONU
           SizedBox(
             width: double.infinity,
             height: 65,
@@ -266,28 +305,36 @@ class _DailyLogViewState extends State<DailyLogView> {
                   side: const BorderSide(
                     color: AppColors.primaryGreen,
                     width: 3,
-                  ), // Siyah üzerine yeşil kontür çok şık durur
+                  ),
                 ),
                 elevation: 8,
               ),
-              onPressed: _saveTodayLog,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.save_rounded, color: AppColors.white, size: 28),
-                  SizedBox(width: 12),
-                  Text(
-                    'GÜNÜ KAYDET',
-                    style: TextStyle(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      fontFamily: 'Comfortaa',
-                      letterSpacing: 1.2,
+              onPressed: _isSaving ? null : _saveTodayLog,
+              child: _isSaving
+                  ? const CircularProgressIndicator(
+                      color: AppColors.primaryGreen,
+                    )
+                  : const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.save_rounded,
+                          color: AppColors.white,
+                          size: 28,
+                        ),
+                        SizedBox(width: 12),
+                        Text(
+                          'GÜNÜ KAYDET',
+                          style: TextStyle(
+                            color: AppColors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                            fontFamily: 'Comfortaa',
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
           const SizedBox(height: 30),
@@ -296,7 +343,6 @@ class _DailyLogViewState extends State<DailyLogView> {
     );
   }
 
-  // Altın Standart: Bölüm Kartı Tasarımı
   Widget _buildSectionCard({
     required String title,
     required IconData icon,
@@ -308,10 +354,7 @@ class _DailyLogViewState extends State<DailyLogView> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: AppColors.black,
-          width: 3,
-        ), // Premium Siyah Çerçeve
+        border: Border.all(color: AppColors.black, width: 3),
         boxShadow: const [
           BoxShadow(color: Colors.black, blurRadius: 10, offset: Offset(0, 5)),
         ],
@@ -341,13 +384,12 @@ class _DailyLogViewState extends State<DailyLogView> {
             ],
           ),
           const SizedBox(height: 25),
-          child, // İçeriğe (Inputlara) ayrılan alan
+          child,
         ],
       ),
     );
   }
 
-  // Şık ve Birimli Input Tasarımı
   Widget _buildPremiumInput({
     required String label,
     required String suffix,
@@ -370,7 +412,7 @@ class _DailyLogViewState extends State<DailyLogView> {
           fontWeight: FontWeight.bold,
         ),
         prefixIcon: Icon(icon, color: AppColors.black.withOpacity(0.7)),
-        suffixText: suffix, // Kutu içindeki birim (Örn: Kg, Litre)
+        suffixText: suffix,
         suffixStyle: const TextStyle(
           fontWeight: FontWeight.bold,
           color: AppColors.primaryGreen,
@@ -378,7 +420,6 @@ class _DailyLogViewState extends State<DailyLogView> {
         ),
         filled: true,
         fillColor: AppColors.background,
-        // Normal durumda siyah çerçeve, tıklanınca ilgili modülün rengiyle (Yeşil, Sarı, Kırmızı) parlar
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(20),
           borderSide: const BorderSide(color: AppColors.black, width: 2),
