@@ -1,70 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_colors.dart';
 import '../core/ui_helper.dart';
+import '../providers/finance_provider.dart';
 
-class FinancialTransaction {
-  String id;
-  String title;
-  String type;
-  String category;
-  double amount;
-  DateTime date;
-
-  FinancialTransaction({
-    required this.id,
-    required this.title,
-    required this.type,
-    required this.category,
-    required this.amount,
-    required this.date,
-  });
-}
-
-class FinanceView extends StatefulWidget {
+class FinanceView extends ConsumerStatefulWidget {
   const FinanceView({super.key});
 
   @override
-  State<FinanceView> createState() => _FinanceViewState();
+  ConsumerState<FinanceView> createState() => _FinanceViewState();
 }
 
-class _FinanceViewState extends State<FinanceView> {
+class _FinanceViewState extends ConsumerState<FinanceView> {
   int _currentTab = 0;
-
-  final List<FinancialTransaction> _transactions = [
-    FinancialTransaction(
-      id: '1',
-      title: 'Süt Firmasına Aylık Satış',
-      type: 'Gelir',
-      category: 'Süt Satışı',
-      amount: 45000,
-      date: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-    FinancialTransaction(
-      id: '2',
-      title: 'TR-1122 Mastit Tedavisi',
-      type: 'Gider',
-      category: 'Tedavi',
-      amount: 1250,
-      date: DateTime.now().subtract(const Duration(days: 2)),
-    ),
-    FinancialTransaction(
-      id: '3',
-      title: 'Hazır Yem Alımı (1.5 Ton)',
-      type: 'Gider',
-      category: 'Stok Alımı',
-      amount: 12000,
-      date: DateTime.now().subtract(const Duration(days: 5)),
-    ),
-    FinancialTransaction(
-      id: '4',
-      title: 'TR-9988 Kesim Geliri',
-      type: 'Gelir',
-      category: 'Hayvan Kesimi',
-      amount: 85000,
-      date: DateTime.now().subtract(const Duration(days: 10)),
-    ),
-  ];
 
   final List<String> _timeFilters = [
     'Günlük',
@@ -76,15 +25,18 @@ class _FinanceViewState extends State<FinanceView> {
   String _selectedFilter = 'Aylık';
   String _customDateText = '';
 
-  double get _totalIncome => _transactions
-      .where((t) => t.type == 'Gelir')
-      .fold(0, (sum, t) => sum + t.amount);
-  double get _totalExpense => _transactions
-      .where((t) => t.type == 'Gider')
-      .fold(0, (sum, t) => sum + t.amount);
-  double get _netProfit => _totalIncome - _totalExpense;
+  // Dinamik Hesaplama Fonksiyonları
+  double _getTotalIncome(List<FinancialTransaction> transactions) =>
+      transactions
+          .where((t) => t.type == 'Gelir')
+          .fold(0, (sum, t) => sum + t.amount);
 
-  // --- TEMİZLENMİŞ POPUP FORMLAR ---
+  double _getTotalExpense(List<FinancialTransaction> transactions) =>
+      transactions
+          .where((t) => t.type == 'Gider')
+          .fold(0, (sum, t) => sum + t.amount);
+
+  // --- POPUP FORMLAR (API'YE BAĞLANDI) ---
   void _showManualTransactionForm({required bool isIncome}) {
     final titleCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
@@ -93,9 +45,12 @@ class _FinanceViewState extends State<FinanceView> {
     UiHelper.showPremiumBottomSheet(
       context: context,
       child: Container(
-        padding: const EdgeInsets.all(
-          24,
-        ), // UiHelper koruduğu için MediaQuery silindi
+        padding: EdgeInsets.only(
+          top: 24,
+          left: 24,
+          right: 24,
+          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+        ),
         decoration: const BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.only(
@@ -164,24 +119,27 @@ class _FinanceViewState extends State<FinanceView> {
                       side: const BorderSide(color: AppColors.black, width: 3),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     if (titleCtrl.text.isNotEmpty &&
                         amountCtrl.text.isNotEmpty) {
-                      setState(() {
-                        _transactions.insert(
-                          0,
-                          FinancialTransaction(
-                            id: DateTime.now().millisecondsSinceEpoch
-                                .toString(),
-                            title: titleCtrl.text,
-                            type: isIncome ? 'Gelir' : 'Gider',
+                      final success = await ref
+                          .read(financeProvider.notifier)
+                          .addTransaction(
+                            type: isIncome ? 'gelir' : 'gider',
                             category: category,
                             amount: double.tryParse(amountCtrl.text) ?? 0,
-                            date: DateTime.now(),
+                            description: titleCtrl.text,
+                          );
+
+                      if (mounted && success) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('İşlem kaydedildi.'),
+                            backgroundColor: AppColors.primaryGreen,
                           ),
                         );
-                      });
-                      Navigator.pop(context);
+                      }
                     }
                   },
                   child: const Text(
@@ -208,7 +166,12 @@ class _FinanceViewState extends State<FinanceView> {
     UiHelper.showPremiumBottomSheet(
       context: context,
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.only(
+          top: 24,
+          left: 24,
+          right: 24,
+          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+        ),
         decoration: const BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.only(
@@ -274,24 +237,27 @@ class _FinanceViewState extends State<FinanceView> {
                       side: const BorderSide(color: AppColors.black, width: 3),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     if (amountCtrl.text.isNotEmpty &&
                         priceCtrl.text.isNotEmpty) {
-                      setState(() {
-                        _transactions.insert(
-                          0,
-                          FinancialTransaction(
-                            id: DateTime.now().millisecondsSinceEpoch
-                                .toString(),
-                            title: '${amountCtrl.text} Litre Süt Satışı',
-                            type: 'Gelir',
+                      final success = await ref
+                          .read(financeProvider.notifier)
+                          .addTransaction(
+                            type: 'gelir',
                             category: 'Süt Satışı',
                             amount: double.tryParse(priceCtrl.text) ?? 0,
-                            date: DateTime.now(),
+                            description: '${amountCtrl.text} Litre Süt Satışı',
+                          );
+
+                      if (mounted && success) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Satış kaydedildi.'),
+                            backgroundColor: AppColors.primaryGreen,
                           ),
                         );
-                      });
-                      Navigator.pop(context);
+                      }
                     }
                   },
                   child: const Text(
@@ -313,12 +279,18 @@ class _FinanceViewState extends State<FinanceView> {
 
   void _showSlaughterSaleForm() {
     final priceCtrl = TextEditingController();
+    // Geliştirme notu: İleride bu listeyi cowProvider üzerinden canlı ineklerle de doldurabilirsin.
     String selectedCow = 'TR-9988 Benekli';
 
     UiHelper.showPremiumBottomSheet(
       context: context,
       child: Container(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.only(
+          top: 24,
+          left: 24,
+          right: 24,
+          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+        ),
         decoration: const BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.only(
@@ -395,23 +367,26 @@ class _FinanceViewState extends State<FinanceView> {
                       ),
                     ),
                   ),
-                  onPressed: () {
+                  onPressed: () async {
                     if (priceCtrl.text.isNotEmpty) {
-                      setState(() {
-                        _transactions.insert(
-                          0,
-                          FinancialTransaction(
-                            id: DateTime.now().millisecondsSinceEpoch
-                                .toString(),
-                            title: '$selectedCow Kesimi',
-                            type: 'Gelir',
+                      final success = await ref
+                          .read(financeProvider.notifier)
+                          .addTransaction(
+                            type: 'gelir',
                             category: 'Hayvan Kesimi',
                             amount: double.tryParse(priceCtrl.text) ?? 0,
-                            date: DateTime.now(),
+                            description: '$selectedCow Kesimi',
+                          );
+
+                      if (mounted && success) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Kesim geliri kaydedildi.'),
+                            backgroundColor: AppColors.primaryGreen,
                           ),
                         );
-                      });
-                      Navigator.pop(context);
+                      }
                     }
                   },
                   child: const Text(
@@ -435,15 +410,14 @@ class _FinanceViewState extends State<FinanceView> {
   Future<void> _pickPremiumDateRange() async {
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
-      initialEntryMode: DatePickerEntryMode
-          .calendarOnly, // Manuel girişi kapatıp sadece şık takvimi açar
+      initialEntryMode: DatePickerEntryMode.calendarOnly,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: AppColors.primaryGreen, // Seçili tarihler yeşil olur
+              primary: AppColors.primaryGreen,
               onPrimary: AppColors.white,
               surface: AppColors.background,
               onSurface: AppColors.black,
@@ -451,8 +425,7 @@ class _FinanceViewState extends State<FinanceView> {
             dialogBackgroundColor: AppColors.background,
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                foregroundColor:
-                    AppColors.black, // İptal / Tamam butonları Siyah
+                foregroundColor: AppColors.black,
                 textStyle: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -611,22 +584,34 @@ class _FinanceViewState extends State<FinanceView> {
 
   @override
   Widget build(BuildContext context) {
+    // Tüm verileri Riverpod ile dinliyoruz
+    final financeAsyncValue = ref.watch(financeProvider);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
           _buildCustomTabBar(),
           Expanded(
-            child: _currentTab == 0
-                ? _buildOperationsTab()
-                : _buildAnalysisTab(),
+            child: financeAsyncValue.when(
+              loading: () => const Center(
+                child: CircularProgressIndicator(color: AppColors.primaryGreen),
+              ),
+              error: (err, stack) =>
+                  Center(child: Text('Bir hata oluştu: $err')),
+              data: (transactions) {
+                return _currentTab == 0
+                    ? _buildOperationsTab(transactions)
+                    : _buildAnalysisTab(transactions);
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildOperationsTab() {
+  Widget _buildOperationsTab(List<FinancialTransaction> transactions) {
     return ListView(
       padding: EdgeInsets.only(
         left: 20,
@@ -682,7 +667,6 @@ class _FinanceViewState extends State<FinanceView> {
         ),
 
         const SizedBox(height: 35),
-
         Row(
           children: [
             Container(
@@ -707,7 +691,21 @@ class _FinanceViewState extends State<FinanceView> {
         ),
         const SizedBox(height: 15),
 
-        ..._transactions
+        if (transactions.isEmpty)
+          const Padding(
+            padding: EdgeInsets.all(20.0),
+            child: Center(
+              child: Text(
+                'Henüz kaydedilmiş bir finans işlemi bulunmuyor.',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+
+        ...transactions
             .map(
               (t) => Container(
                 margin: const EdgeInsets.only(bottom: 12),
@@ -755,6 +753,7 @@ class _FinanceViewState extends State<FinanceView> {
                               fontSize: 16,
                               color: AppColors.black,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -787,7 +786,11 @@ class _FinanceViewState extends State<FinanceView> {
     );
   }
 
-  Widget _buildAnalysisTab() {
+  Widget _buildAnalysisTab(List<FinancialTransaction> transactions) {
+    double totalIncome = _getTotalIncome(transactions);
+    double totalExpense = _getTotalExpense(transactions);
+    double netProfit = totalIncome - totalExpense;
+
     return ListView(
       padding: EdgeInsets.only(
         left: 20,
@@ -887,9 +890,9 @@ class _FinanceViewState extends State<FinanceView> {
               ),
               const SizedBox(height: 10),
               Text(
-                '${_netProfit >= 0 ? '+' : ''}₺${_netProfit.toStringAsFixed(0)}',
+                '${netProfit >= 0 ? '+' : ''}₺${netProfit.toStringAsFixed(0)}',
                 style: TextStyle(
-                  color: _netProfit >= 0
+                  color: netProfit >= 0
                       ? AppColors.primaryGreen
                       : AppColors.barnRed,
                   fontSize: 40,
@@ -934,7 +937,7 @@ class _FinanceViewState extends State<FinanceView> {
                       ),
                     ),
                     Text(
-                      '₺${_totalIncome.toStringAsFixed(0)}',
+                      '₺${totalIncome.toStringAsFixed(0)}',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -977,7 +980,7 @@ class _FinanceViewState extends State<FinanceView> {
                       ),
                     ),
                     Text(
-                      '₺${_totalExpense.toStringAsFixed(0)}',
+                      '₺${totalExpense.toStringAsFixed(0)}',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -1017,7 +1020,7 @@ class _FinanceViewState extends State<FinanceView> {
                 child: Column(
                   children: [
                     Text(
-                      '₺${_totalIncome.toInt()}',
+                      '₺${totalIncome.toInt()}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: AppColors.primaryGreen,
@@ -1028,11 +1031,11 @@ class _FinanceViewState extends State<FinanceView> {
                       child: Align(
                         alignment: Alignment.bottomCenter,
                         child: FractionallySizedBox(
-                          heightFactor: _totalIncome == 0
+                          heightFactor: totalIncome == 0
                               ? 0
-                              : (_totalIncome >= _totalExpense
+                              : (totalIncome >= totalExpense
                                     ? 1.0
-                                    : (_totalIncome / _totalExpense)),
+                                    : (totalIncome / totalExpense)),
                           child: Container(
                             width: 60,
                             decoration: BoxDecoration(
@@ -1058,18 +1061,16 @@ class _FinanceViewState extends State<FinanceView> {
                   ],
                 ),
               ),
-
               Container(
                 width: 2,
                 height: double.infinity,
                 color: AppColors.black,
               ),
-
               Expanded(
                 child: Column(
                   children: [
                     Text(
-                      '₺${_totalExpense.toInt()}',
+                      '₺${totalExpense.toInt()}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: AppColors.barnRed,
@@ -1080,11 +1081,11 @@ class _FinanceViewState extends State<FinanceView> {
                       child: Align(
                         alignment: Alignment.bottomCenter,
                         child: FractionallySizedBox(
-                          heightFactor: _totalExpense == 0
+                          heightFactor: totalExpense == 0
                               ? 0
-                              : (_totalExpense >= _totalIncome
+                              : (totalExpense >= totalIncome
                                     ? 1.0
-                                    : (_totalExpense / _totalIncome)),
+                                    : (totalExpense / totalIncome)),
                           child: Container(
                             width: 60,
                             decoration: BoxDecoration(
@@ -1115,9 +1116,8 @@ class _FinanceViewState extends State<FinanceView> {
         ),
 
         const SizedBox(height: 35),
-
         const Text(
-          'Aylık Kar Trendi',
+          'Aylık Kar Trendi (Örnek Görsel)',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -1153,20 +1153,18 @@ class _FinanceViewState extends State<FinanceView> {
   }
 }
 
+// Görsel trend tablosu aynı kaldı
 class TrendLinePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final data = [0.3, 0.5, 0.4, 0.7, 0.6, 0.9];
-
     final paintLine = Paint()
       ..color = AppColors.primaryGreen
       ..strokeWidth = 4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-
     final path = Path();
     final fillPath = Path();
-
     double stepX = size.width / (data.length - 1);
 
     path.moveTo(0, size.height - (data[0] * size.height));
@@ -1178,13 +1176,10 @@ class TrendLinePainter extends CustomPainter {
       double y1 = size.height - (data[i] * size.height);
       double x2 = (i + 1) * stepX;
       double y2 = size.height - (data[i + 1] * size.height);
-
       double controlPointX = x1 + (x2 - x1) / 2;
-
       path.cubicTo(controlPointX, y1, controlPointX, y2, x2, y2);
       fillPath.cubicTo(controlPointX, y1, controlPointX, y2, x2, y2);
     }
-
     fillPath.lineTo(size.width, size.height);
     fillPath.close();
 
@@ -1193,7 +1188,6 @@ class TrendLinePainter extends CustomPainter {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
     ).createShader(Rect.fromLTRB(0, 0, size.width, size.height));
-
     final paintFill = Paint()
       ..shader = gradient
       ..style = PaintingStyle.fill;

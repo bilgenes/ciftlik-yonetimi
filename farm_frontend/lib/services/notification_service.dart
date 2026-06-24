@@ -2,7 +2,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
-import 'package:farm_frontend/core/network/dio_client.dart';
 
 // Arkaplan mesaj yakalayıcı (Top-level function olmalıdır)
 @pragma('vm:entry-point')
@@ -63,7 +62,8 @@ class NotificationService {
     );
     await _localNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
 
     // 5. Ön plan mesaj dinleyici
