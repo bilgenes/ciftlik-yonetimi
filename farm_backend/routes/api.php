@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\FinanceController;
 use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\AgendaController;
 use App\Http\Controllers\Api\AnalysisController;
+use App\Http\Controllers\Api\SettingController;
 
 // --------------------------------------------------------
 // DIŞARIYA AÇIK ROTALAR (Token Gerektirmeyenler)
@@ -47,6 +48,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Finans Modülü API Uçları (index ve store metotlarını otomatik açar)
     Route::apiResource('finances', FinanceController::class)->only(['index', 'store']);
+
+    // Ayarlar Rotaları
+    Route::get('settings', [SettingController::class, 'index']);
+    Route::post('settings', [SettingController::class, 'store']);
 
     // Analiz Verileri
     Route::get('analysis', [AnalysisController::class, 'index']);
