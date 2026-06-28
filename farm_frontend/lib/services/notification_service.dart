@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:farm_frontend/core/network/dio_client.dart';
 
 // Arkaplan mesaj yakalayıcı (Top-level function olmalıdır)
 @pragma('vm:entry-point')
@@ -35,8 +36,7 @@ class NotificationService {
     String? token = await _firebaseMessaging.getToken();
     if (token != null) {
       debugPrint('FCM Token: $token');
-      // Token'ı backend'e gönder (örneğin giriş yapıldıysa)
-      // _sendTokenToBackend(token);
+      _sendTokenToBackend(token);
     }
 
     // 3. Arkaplan handler
@@ -90,11 +90,11 @@ class NotificationService {
     });
   }
 
-  // Future<void> _sendTokenToBackend(String token) async {
-  //   try {
-  //     await DioClient().dio.post('user/fcm-token', data: {'fcm_token': token});
-  //   } catch (e) {
-  //     debugPrint('Token backend\'e gönderilemedi: $e');
-  //   }
-  // }
+  Future<void> _sendTokenToBackend(String token) async {
+    try {
+      await DioClient().dio.post('user/fcm-token', data: {'fcm_token': token});
+    } catch (e) {
+      debugPrint('Token backend\'e gönderilemedi: $e');
+    }
+  }
 }

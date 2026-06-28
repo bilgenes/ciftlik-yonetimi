@@ -1,4 +1,6 @@
 <?php
+
+use App\Http\Controllers\Api\NotificationController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\CowController;
 use App\Http\Controllers\Api\AuthController;
@@ -52,6 +54,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Ayarlar Rotaları
     Route::get('settings', [SettingController::class, 'index']);
     Route::post('settings', [SettingController::class, 'store']);
+
+    // Bildirimler
+    Route::get('notifications', [NotificationController::class, 'index']);
+    Route::put('notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::put('notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::post('user/fcm-token', [NotificationController::class, 'updateFcmToken']);
 
     // Analiz Verileri
     Route::get('analysis', [AnalysisController::class, 'index']);

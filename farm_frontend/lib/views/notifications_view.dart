@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_colors.dart';
 import '../core/ui_helper.dart';
+import '../providers/notification_provider.dart';
 
 // --- BİLDİRİM VERİ MODELİ ---
 class FarmNotification {
@@ -9,7 +11,7 @@ class FarmNotification {
   final String title;
   final String message;
   final DateTime date;
-  final String type; // 'health', 'stock', 'system', 'finance'
+  final String type;
   bool isRead;
 
   FarmNotification({
@@ -21,18 +23,15 @@ class FarmNotification {
     this.isRead = false,
   });
 
-  // Zaman formatlayıcı (Örn: 2 saat önce, Dün, 15 Mayıs)
   String get timeAgo {
     final now = DateTime.now();
     final difference = now.difference(date);
-
     if (difference.inMinutes < 60) return '${difference.inMinutes} dk önce';
     if (difference.inHours < 24) return '${difference.inHours} saat önce';
     if (difference.inDays == 1) return 'Dün';
     return DateFormat('dd MMM', 'tr_TR').format(date);
   }
 
-  // Türe göre renk
   Color get color {
     switch (type) {
       case 'health':
@@ -46,7 +45,6 @@ class FarmNotification {
     }
   }
 
-  // Türe göre ikon
   IconData get icon {
     switch (type) {
       case 'health':
@@ -61,75 +59,19 @@ class FarmNotification {
   }
 }
 
-class NotificationsView extends StatefulWidget {
+class NotificationsView extends ConsumerStatefulWidget {
   const NotificationsView({super.key});
 
   @override
-  State<NotificationsView> createState() => _NotificationsViewState();
+  ConsumerState<NotificationsView> createState() => _NotificationsViewState();
 }
 
-class _NotificationsViewState extends State<NotificationsView> {
+class _NotificationsViewState extends ConsumerState<NotificationsView> {
   int _currentTab = 0; // 0: Okunmadı, 1: Okundu
-
-  // --- MOCK BİLDİRİMLER ---
-  final List<FarmNotification> _notifications = [
-    FarmNotification(
-      id: '1',
-      title: 'Aşı Vakti Geldi!',
-      type: 'health',
-      message:
-          'TR-1122 Sarıkız adlı ineğin planlanmış "Kuru Dönem Aşısı" için bugün son gün. Lütfen aşıyı uygulayıp Sağlık Durumları sekmesinden sisteme işleyin.',
-      date: DateTime.now().subtract(const Duration(minutes: 15)),
-    ),
-    FarmNotification(
-      id: '2',
-      title: 'Kritik Stok Uyarısı',
-      type: 'stock',
-      message:
-          'Hazır Yem deponuzda 200 Kg altı ürün kaldı. Önümüzdeki 3 gün içinde yem tedariği yapmanız önerilir.',
-      date: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-    FarmNotification(
-      id: '3',
-      title: 'Yeni Buzağı Kaydı',
-      type: 'system',
-      message:
-          'Sisteme 1 adet yeni buzağı kaydı başarıyla eklendi. Düve kategorisine geçiş tarihleri ajandaya işlendi.',
-      date: DateTime.now().subtract(const Duration(hours: 12)),
-    ),
-    FarmNotification(
-      id: '4',
-      title: 'Aylık Kar Raporu Hazır',
-      type: 'finance',
-      isRead: true,
-      message:
-          'Geçtiğimiz ayın finansal analizleri tamamlandı. Toplam %12 kar artışı sağladınız. Detaylar için Finans Analiz sekmesini inceleyin.',
-      date: DateTime.now().subtract(const Duration(days: 2)),
-    ),
-    FarmNotification(
-      id: '5',
-      title: 'Veteriner Kontrolü Tamamlandı',
-      type: 'health',
-      isRead: true,
-      message:
-          'TR-9988 Benekli adlı hayvanın Mastit tedavisi başarıyla sonuçlandı ve İyileşti olarak işaretlendi.',
-      date: DateTime.now().subtract(const Duration(days: 5)),
-    ),
-  ];
-
-  // Filtrelenmiş Listeler
-  List<FarmNotification> get _unreadList =>
-      _notifications.where((n) => !n.isRead).toList();
-  List<FarmNotification> get _readList =>
-      _notifications.where((n) => n.isRead).toList();
 
   // Tümünü Okundu İşaretle
   void _markAllAsRead() {
-    setState(() {
-      for (var n in _notifications) {
-        n.isRead = true;
-      }
-    });
+    ref.read(notificationProvider.notifier).markAllAsRead();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Tüm bildirimler okundu işaretlendi!'),
@@ -140,8 +82,9 @@ class _NotificationsViewState extends State<NotificationsView> {
 
   // --- POPUP: BİLDİRİM DETAYLARI ---
   void _showNotificationDetails(FarmNotification notif) {
-    // Tıklanınca otomatik okundu yap
-    setState(() => notif.isRead = true);
+    if (!notif.isRead) {
+      ref.read(notificationProvider.notifier).markAsRead(notif.id);
+    }
 
     UiHelper.showPremiumBottomSheet(
       context: context,
@@ -175,7 +118,6 @@ class _NotificationsViewState extends State<NotificationsView> {
             ),
             const SizedBox(height: 25),
 
-            // Başlık ve İkon
             Row(
               children: [
                 Container(
@@ -217,14 +159,13 @@ class _NotificationsViewState extends State<NotificationsView> {
                 ),
               ],
             ),
-
             const SizedBox(height: 25),
             const Divider(color: AppColors.black, thickness: 2),
             const SizedBox(height: 15),
 
-            // Mesaj İçeriği
             Container(
               padding: const EdgeInsets.all(20),
+              width: double.infinity,
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -240,10 +181,8 @@ class _NotificationsViewState extends State<NotificationsView> {
                 ),
               ),
             ),
-
             const SizedBox(height: 35),
 
-            // Kapat Butonu
             SizedBox(
               width: double.infinity,
               height: 60,
@@ -271,8 +210,7 @@ class _NotificationsViewState extends State<NotificationsView> {
     );
   }
 
-  // --- ÖZEL SEKME BUTONU ---
-  Widget _buildCustomTabBar() {
+  Widget _buildCustomTabBar(int unreadCount) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 10),
       height: 55,
@@ -309,7 +247,7 @@ class _NotificationsViewState extends State<NotificationsView> {
                         fontFamily: 'Comfortaa',
                       ),
                     ),
-                    if (_unreadList.isNotEmpty) ...[
+                    if (unreadCount > 0) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.all(6),
@@ -322,7 +260,7 @@ class _NotificationsViewState extends State<NotificationsView> {
                           ),
                         ),
                         child: Text(
-                          '${_unreadList.length}',
+                          '$unreadCount',
                           style: const TextStyle(
                             color: AppColors.white,
                             fontSize: 10,
@@ -365,7 +303,6 @@ class _NotificationsViewState extends State<NotificationsView> {
     );
   }
 
-  // --- BİLDİRİM KARTI ---
   Widget _buildNotificationCard(FarmNotification notif) {
     return InkWell(
       onTap: () => _showNotificationDetails(notif),
@@ -394,7 +331,6 @@ class _NotificationsViewState extends State<NotificationsView> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // İkon
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -412,8 +348,6 @@ class _NotificationsViewState extends State<NotificationsView> {
               ),
             ),
             const SizedBox(width: 15),
-
-            // İçerik
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,8 +397,6 @@ class _NotificationsViewState extends State<NotificationsView> {
                 ],
               ),
             ),
-
-            // Okunmadı Noktası
             if (!notif.isRead)
               Container(
                 margin: const EdgeInsets.only(left: 10, top: 5),
@@ -483,105 +415,111 @@ class _NotificationsViewState extends State<NotificationsView> {
 
   @override
   Widget build(BuildContext context) {
-    List<FarmNotification> displayList = _currentTab == 0
-        ? _unreadList
-        : _readList;
+    final asyncNotifications = ref.watch(notificationProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 10),
+      body: asyncNotifications.when(
+        loading: () => const Center(
+          child: CircularProgressIndicator(color: AppColors.primaryGreen),
+        ),
+        error: (err, stack) =>
+            Center(child: Text('Bildirimler yüklenemedi: $err')),
+        data: (notifications) {
+          final unreadList = notifications.where((n) => !n.isRead).toList();
+          final readList = notifications.where((n) => n.isRead).toList();
+          final displayList = _currentTab == 0 ? unreadList : readList;
 
-            // Başlık ve Tümünü Okundu İşaretle Butonu
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Bildirim Merkezi',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.black,
-                    fontFamily: 'Comfortaa',
-                  ),
-                ),
-                if (_currentTab == 0 && _unreadList.isNotEmpty)
-                  InkWell(
-                    onTap: _markAllAsRead,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Bildirim Merkezi',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
                         color: AppColors.black,
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(
-                            Icons.checklist_rtl_rounded,
-                            color: AppColors.white,
-                            size: 18,
-                          ),
-                          SizedBox(width: 5),
-                          Text(
-                            'Tümünü Oku',
-                            style: TextStyle(
-                              color: AppColors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                        fontFamily: 'Comfortaa',
                       ),
                     ),
-                  ),
+                    if (_currentTab == 0 && unreadList.isNotEmpty)
+                      InkWell(
+                        onTap: _markAllAsRead,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.black,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.checklist_rtl_rounded,
+                                color: AppColors.white,
+                                size: 18,
+                              ),
+                              SizedBox(width: 5),
+                              Text(
+                                'Tümünü Oku',
+                                style: TextStyle(
+                                  color: AppColors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                _buildCustomTabBar(unreadList.length),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: displayList.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.notifications_off_outlined,
+                                size: 80,
+                                color: AppColors.black.withOpacity(0.1),
+                              ),
+                              const SizedBox(height: 15),
+                              Text(
+                                _currentTab == 0
+                                    ? 'Harika! Yeni bildirim yok.'
+                                    : 'Henüz okunan bildirim yok.',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          itemCount: displayList.length,
+                          itemBuilder: (context, index) =>
+                              _buildNotificationCard(displayList[index]),
+                        ),
+                ),
               ],
             ),
-
-            _buildCustomTabBar(),
-            const SizedBox(height: 10),
-
-            // LİSTE ALANI
-            Expanded(
-              child: displayList.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.notifications_off_outlined,
-                            size: 80,
-                            color: AppColors.black.withOpacity(0.1),
-                          ),
-                          const SizedBox(height: 15),
-                          Text(
-                            _currentTab == 0
-                                ? 'Harika! Yeni bildirim yok.'
-                                : 'Henüz okunan bildirim yok.',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      itemCount: displayList.length,
-                      itemBuilder: (context, index) =>
-                          _buildNotificationCard(displayList[index]),
-                    ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
