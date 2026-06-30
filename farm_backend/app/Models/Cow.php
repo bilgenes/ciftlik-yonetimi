@@ -3,29 +3,33 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Cow extends Model
 {
-    // Mass assignment (Toplu veri ataması) kilidini açıyoruz
-    protected $guarded = []; 
+    protected $fillable = [
+        'tag_number', 'name', 'birth_date', 'category', 'mother_id', // <-- mother_id EKLENDİ
+        'chronic_disease', 'calf_count', 'medical_history',
+        'total_milk_produced', 'total_income', 'total_cost',
+        'notes', 'status'
+    ];
 
-    // 1. Bir ineğin birden fazla sağlık kaydı olabilir (Bire-Çok İlişki)
-    public function healthRecords(): HasMany
-    {
-        return $this->hasMany(HealthRecord::class);
-    }
+    protected $casts = [
+        'birth_date' => 'date',
+    ];
 
-    // 2. Bu ineğin annesi kim? (Kendi tablosuna referans - Çoğa-Bir İlişki)
-    public function mother(): BelongsTo
+    // İneğin annesi ile olan ilişkisi
+    public function mother()
     {
         return $this->belongsTo(Cow::class, 'mother_id');
     }
 
-    // 3. Bu ineğin yavruları (Kendi tablosuna referans - Bire-Çok İlişki)
-    public function calves(): HasMany
+    public function healthRecords()
     {
-        return $this->hasMany(Cow::class, 'mother_id');
+        return $this->hasMany(HealthRecord::class);
+    }
+
+    public function dailyLogs()
+    {
+        return $this->hasMany(DailyLog::class);
     }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_colors.dart';
 import '../providers/cow_provider.dart';
+import '../providers/settings_provider.dart';
 
 // 1. Riverpod ConsumerStatelessWidget yapısına geçiş yaptık
 class HomeView extends ConsumerWidget {
@@ -109,8 +110,16 @@ class HomeView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 2. Canlı İnek Listesini cowProvider Üzerinden Dinliyoruz
+    // Canlı İnek Listesi
     final cowAsyncValue = ref.watch(cowProvider);
+    // YENİ: Canlı Ayarlar (Çiftlik Adı için)
+    final settingsAsyncValue = ref.watch(settingsProvider);
+
+    // Ayarlardan ismi güvenle al (Eğer ayarlanmadıysa 'Enes' kullan)
+    String farmerName = 'Enes';
+    if (settingsAsyncValue is AsyncData && settingsAsyncValue.value != null) {
+      farmerName = settingsAsyncValue.value!['profile_name'] ?? 'Enes';
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -168,9 +177,9 @@ class HomeView extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 5),
-                        const Text(
-                          'Enes Çiftliğine\nHoş Geldin...',
-                          style: TextStyle(
+                        Text(
+                          '$farmerName Çiftliğine\nHoş Geldin...', // <-- YENİ: Değişken isim
+                          style: const TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             fontFamily: 'Comfortaa',

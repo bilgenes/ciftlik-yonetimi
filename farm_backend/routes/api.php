@@ -48,8 +48,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('stocks', [StockController::class, 'index']);
     Route::post('stocks/purchase', [StockController::class, 'purchase']);
 
-    // Finans Modülü API Uçları (index ve store metotlarını otomatik açar)
+    // Finans Modülü API Uçları
     Route::apiResource('finances', FinanceController::class)->only(['index', 'store']);
+    Route::post('finances/milk-sale', [FinanceController::class, 'milkSale']);
+    Route::post('finances/slaughter', [FinanceController::class, 'slaughterCow']);
 
     // Ayarlar Rotaları
     Route::get('settings', [SettingController::class, 'index']);

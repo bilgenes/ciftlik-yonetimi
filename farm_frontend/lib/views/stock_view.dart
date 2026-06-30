@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_colors.dart';
 import '../core/ui_helper.dart';
 import '../providers/stock_provider.dart';
+import '../providers/finance_provider.dart';
 
 class StockView extends ConsumerStatefulWidget {
   const StockView({super.key});
@@ -238,10 +239,15 @@ class _StockViewState extends ConsumerState<StockView> {
                             );
 
                         if (mounted && success) {
+                          // YENİ EKLENEN KISIM: Finans sayfasını anında tetikleyip günceller!
+                          ref.invalidate(financeProvider);
+
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
-                              content: Text('✅ Stok eklendi.'),
+                              content: Text(
+                                '✅ Stok eklendi, maliyet Finansa işlendi!',
+                              ),
                               backgroundColor: AppColors.primaryGreen,
                             ),
                           );

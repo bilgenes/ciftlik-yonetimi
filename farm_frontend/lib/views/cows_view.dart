@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../core/app_colors.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:farm_frontend/providers/cow_provider.dart';
-import 'package:farm_frontend/widgets/shimmer_loading.dart';
-import 'package:farm_frontend/models/cow.dart';
-
-// --- GELİŞMİŞ VERİ MODELİ ---
-// (Cow modeli backend'den JSON olarak geleceği için artık toJson/fromJson yapısına ihtiyacımız var.
-// Şimdilik dynamic kullanarak veya Map'den dönüştürerek halledebiliriz.)
+import '../core/app_colors.dart';
+import '../core/ui_helper.dart';
+import '../providers/cow_provider.dart';
+import '../providers/settings_provider.dart';
+import '../providers/finance_provider.dart';
+import '../widgets/shimmer_loading.dart';
+import '../models/cow.dart';
 
 class CowsView extends ConsumerStatefulWidget {
   const CowsView({super.key});
@@ -19,7 +17,7 @@ class CowsView extends ConsumerStatefulWidget {
 }
 
 class _CowsViewState extends ConsumerState<CowsView> {
-  // 1. Kategoriler Güncellendi
+  // Ayrılanlar sekmesi tamamen kaldırıldı
   final List<String> _categories = [
     'Tümü',
     'Süt Veren İnekler',
@@ -27,7 +25,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
     'Hamile İnekler',
     'Danalar',
     'Buzağılar',
-    'Ayrılanlar',
   ];
   String _selectedCategory = 'Tümü';
 
@@ -35,21 +32,70 @@ class _CowsViewState extends ConsumerState<CowsView> {
     if (_selectedCategory == 'Tümü') {
       return cows.where((c) => c.status == 'Aktif').toList();
     }
-    if (_selectedCategory == 'Ayrılanlar') {
-      return cows.where((c) => c.status != 'Aktif').toList();
-    }
     return cows
         .where((c) => c.category == _selectedCategory && c.status == 'Aktif')
         .toList();
   }
 
+  // --- AKILLI HESAPLAMA MOTORU ---
+  // Ayarlardan gelen katsayılar ile ineğin yaşını çarparak gerçek verileri üretir
+  Map<String, double> _calculateDynamicStats(
+    Cow cow,
+    Map<String, dynamic> settings,
+  ) {
+    String prefix = cow.category.replaceAll(' ', '_').toLowerCase();
+    prefix = prefix
+        .replaceAll('ı', 'i')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ü', 'u')
+        .replaceAll('ş', 's')
+        .replaceAll('ö', 'o')
+        .replaceAll('ç', 'c'); // Türkçe karakter temizliği
+
+    double prodMilk =
+        double.tryParse(settings['${prefix}_prodMilk']?.toString() ?? '0') ?? 0;
+    double consMilk =
+        double.tryParse(settings['${prefix}_consMilk']?.toString() ?? '0') ?? 0;
+    double feed =
+        double.tryParse(settings['${prefix}_feed']?.toString() ?? '0') ?? 0;
+    double straw =
+        double.tryParse(settings['${prefix}_straw']?.toString() ?? '0') ?? 0;
+    double silage =
+        double.tryParse(settings['${prefix}_silage']?.toString() ?? '0') ?? 0;
+
+    double milkPrice =
+        double.tryParse(settings['milk_price']?.toString() ?? '0') ?? 0;
+    double feedPrice =
+        double.tryParse(settings['feed_price']?.toString() ?? '0') ?? 0;
+    double strawPrice =
+        double.tryParse(settings['straw_price']?.toString() ?? '0') ?? 0;
+    double silagePrice =
+        double.tryParse(settings['silage_price']?.toString() ?? '0') ?? 0;
+
+    double dailyIncome = prodMilk * milkPrice;
+    double dailyCost =
+        (consMilk * milkPrice) +
+        (feed * feedPrice) +
+        (straw * strawPrice) +
+        (silage * silagePrice);
+
+    int days = cow.ageInDays > 0 ? cow.ageInDays : 1;
+
+    return {
+      'daily_milk': prodMilk,
+      'total_milk': prodMilk * days,
+      'daily_income': dailyIncome,
+      'total_income': dailyIncome * days,
+      'daily_cost': dailyCost,
+      'total_cost': dailyCost * days,
+    };
+  }
+
   // --- ORTAK EKLEME / DÜZENLEME FORMU ---
-  // Ekrana sığmama ve eksik bilgi sorununu çözmek için devasa, kaydırılabilir bir BottomSheet yaptık.
-  void _showCowForm({Cow? cowToEdit}) {
+  void _showCowForm(List<Cow> allCows, {Cow? cowToEdit}) {
     final isEditing = cowToEdit != null;
     final formKey = GlobalKey<FormState>();
 
-    // Controller'lar
     final tagCtrl = TextEditingController(
       text: isEditing ? cowToEdit.tagNumber : '',
     );
@@ -65,25 +111,26 @@ class _CowsViewState extends ConsumerState<CowsView> {
     final notesCtrl = TextEditingController(
       text: isEditing ? cowToEdit.notes : '',
     );
-    final calfCtrl = TextEditingController(
-      text: isEditing ? cowToEdit.calfCount.toString() : '0',
-    );
-    final milkCtrl = TextEditingController(
-      text: isEditing ? cowToEdit.totalMilkProduced.toString() : '0',
-    );
-    final incomeCtrl = TextEditingController(
-      text: isEditing ? cowToEdit.totalIncome.toString() : '0',
-    );
-    final costCtrl = TextEditingController(
-      text: isEditing ? cowToEdit.totalCost.toString() : '0',
-    );
 
     DateTime? selectedDate = isEditing ? cowToEdit.birthDate : null;
     String selectedCat = isEditing ? cowToEdit.category : 'Süt Veren İnekler';
+    String? selectedMotherId = isEditing ? cowToEdit.motherId : null;
+
+    // Anne olabilecek yetişkin inekleri filtrele
+    List<Cow> potentialMothers = allCows
+        .where(
+          (c) =>
+              c.status == 'Aktif' &&
+              (c.category == 'Süt Veren İnekler' ||
+                  c.category == 'Hamile İnekler' ||
+                  c.category == 'Düveler') &&
+              c.id != cowToEdit?.id,
+        )
+        .toList();
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Klavyenin üstüne çıkabilmesi için hayati ayar
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
@@ -93,9 +140,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
               top: 24,
               left: 24,
               right: 24,
-              bottom:
-                  MediaQuery.of(context).viewInsets.bottom +
-                  24, // Klavye boşluğu
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
             ),
             decoration: const BoxDecoration(
               color: AppColors.background,
@@ -135,7 +180,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Form Alanları (Kaydırılabilir)
                   Expanded(
                     child: SingleChildScrollView(
                       child: Column(
@@ -207,7 +251,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
                               Icons.category,
                             ),
                             items: _categories
-                                .where((c) => c != 'Tümü' && c != 'Ayrılanlar')
+                                .where((c) => c != 'Tümü')
                                 .map(
                                   (c) => DropdownMenuItem(
                                     value: c,
@@ -225,53 +269,38 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           ),
                           const SizedBox(height: 15),
 
-                          // Sayısal Veriler Yan Yana
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildPremiumTextField(
-                                  'Yavru Sayısı',
-                                  Icons.child_care,
-                                  calfCtrl,
-                                  isNumber: true,
+                          // YENİ: ANNESİ SEÇİMİ
+                          DropdownButtonFormField<String?>(
+                            value: selectedMotherId,
+                            decoration: _premiumInputDeco(
+                              'Annesi (Opsiyonel)',
+                              Icons.family_restroom,
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text(
+                                  'Belirtilmedi',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              const SizedBox(width: 15),
-                              Expanded(
-                                child: _buildPremiumTextField(
-                                  'Top. Süt (L)',
-                                  Icons.water_drop,
-                                  milkCtrl,
-                                  isNumber: true,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 15),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildPremiumTextField(
-                                  'Kazanç (₺)',
-                                  Icons.trending_up,
-                                  incomeCtrl,
-                                  isNumber: true,
-                                ),
-                              ),
-                              const SizedBox(width: 15),
-                              Expanded(
-                                child: _buildPremiumTextField(
-                                  'Maliyet (₺)',
-                                  Icons.trending_down,
-                                  costCtrl,
-                                  isNumber: true,
+                              ...potentialMothers.map(
+                                (c) => DropdownMenuItem(
+                                  value: c.id,
+                                  child: Text(
+                                    '${c.tagNumber} - ${c.name}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
+                            onChanged: (val) =>
+                                setModalState(() => selectedMotherId = val),
                           ),
                           const SizedBox(height: 15),
 
-                          // Tıbbi Geçmiş ve Notlar
                           _buildPremiumTextField(
                             'Kalıcı Hastalık',
                             Icons.medical_services,
@@ -297,7 +326,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
                     ),
                   ),
 
-                  // Kaydet Butonu (Sabit Alt Kısım)
+                  // Kaydet Butonu
                   SizedBox(
                     width: double.infinity,
                     height: 60,
@@ -315,24 +344,14 @@ class _CowsViewState extends ConsumerState<CowsView> {
                       onPressed: () async {
                         if (formKey.currentState!.validate() &&
                             selectedDate != null) {
-                          // Yükleniyor durumunu göstermek istersen buraya ekleyebilirsin
-
                           if (isEditing) {
-                            // --- GÜNCELLEME (PUT) İŞLEMİ ---
                             cowToEdit.tagNumber = tagCtrl.text;
                             cowToEdit.name = nameCtrl.text.isEmpty
                                 ? 'İsimsiz'
                                 : nameCtrl.text;
                             cowToEdit.birthDate = selectedDate!;
                             cowToEdit.category = selectedCat;
-                            cowToEdit.calfCount =
-                                int.tryParse(calfCtrl.text) ?? 0;
-                            cowToEdit.totalMilkProduced =
-                                double.tryParse(milkCtrl.text) ?? 0.0;
-                            cowToEdit.totalIncome =
-                                double.tryParse(incomeCtrl.text) ?? 0.0;
-                            cowToEdit.totalCost =
-                                double.tryParse(costCtrl.text) ?? 0.0;
+                            cowToEdit.motherId = selectedMotherId;
                             cowToEdit.chronicDisease = diseaseCtrl.text;
                             cowToEdit.medicalHistory = historyCtrl.text;
                             cowToEdit.notes = notesCtrl.text;
@@ -340,30 +359,23 @@ class _CowsViewState extends ConsumerState<CowsView> {
                             final success = await ref
                                 .read(cowProvider.notifier)
                                 .updateCow(cowToEdit);
-                            if (success && mounted) {
+                            if (success && mounted)
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Bilgiler güncellendi!'),
                                   backgroundColor: AppColors.primaryGreen,
                                 ),
                               );
-                            }
                           } else {
-                            // --- YENİ EKLEME (POST) İŞLEMİ ---
                             final newCow = Cow(
-                              id: '', // Backend atayacak
+                              id: '',
                               tagNumber: tagCtrl.text,
                               name: nameCtrl.text.isEmpty
                                   ? 'İsimsiz'
                                   : nameCtrl.text,
                               birthDate: selectedDate!,
                               category: selectedCat,
-                              calfCount: int.tryParse(calfCtrl.text) ?? 0,
-                              totalMilkProduced:
-                                  double.tryParse(milkCtrl.text) ?? 0.0,
-                              totalIncome:
-                                  double.tryParse(incomeCtrl.text) ?? 0.0,
-                              totalCost: double.tryParse(costCtrl.text) ?? 0.0,
+                              motherId: selectedMotherId,
                               chronicDisease: diseaseCtrl.text.isEmpty
                                   ? 'Yok'
                                   : diseaseCtrl.text,
@@ -383,28 +395,12 @@ class _CowsViewState extends ConsumerState<CowsView> {
                                   backgroundColor: AppColors.primaryGreen,
                                 ),
                               );
-                            } else if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Ekleme başarısız!'),
-                                  backgroundColor: AppColors.barnRed,
-                                ),
-                              );
                             }
                           }
-
                           if (mounted) {
-                            Navigator.pop(context); // Formu Kapat
-                            if (isEditing)
-                              Navigator.pop(context); // Detay penceresini kapat
+                            Navigator.pop(context);
+                            if (isEditing) Navigator.pop(context);
                           }
-                        } else if (selectedDate == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Doğum tarihi seçmek zorunludur!'),
-                              backgroundColor: AppColors.barnRed,
-                            ),
-                          );
                         }
                       },
                       child: Text(
@@ -426,8 +422,15 @@ class _CowsViewState extends ConsumerState<CowsView> {
     );
   }
 
-  // --- ALT PENCERE: İNEK DETAYLARI (KİMLİK KARTI) ---
-  void _showCowDetails(Cow cow) {
+  // --- İNEK DETAYLARI (AKILLI KİMLİK KARTI) ---
+  void _showCowDetails(
+    Cow cow,
+    Map<String, dynamic> settings,
+    List<Cow> allCows,
+  ) {
+    // Dinamik katsayıları hesapla
+    final stats = _calculateDynamicStats(cow, settings);
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -466,7 +469,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
             ),
             const SizedBox(height: 20),
 
-            // Başlık ve Düzenle Butonu
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -487,13 +489,12 @@ class _CowsViewState extends ConsumerState<CowsView> {
                     color: AppColors.black,
                     size: 28,
                   ),
-                  onPressed: () => _showCowForm(cowToEdit: cow),
+                  onPressed: () => _showCowForm(allCows, cowToEdit: cow),
                 ),
               ],
             ),
             const SizedBox(height: 15),
 
-            // Detaylar (Kaydırılabilir Alan)
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
@@ -510,19 +511,27 @@ class _CowsViewState extends ConsumerState<CowsView> {
                         cow.category,
                         color: AppColors.primaryGreen,
                       ),
-                      _buildInfoRow(
-                        Icons.child_care,
-                        'Yavru Sayısı',
-                        '${cow.calfCount} Adet',
-                      ),
+                      // YENİ: Annesi Gösterimi
+                      if (cow.motherName != null && cow.motherName!.isNotEmpty)
+                        _buildInfoRow(
+                          Icons.family_restroom,
+                          'Annesi',
+                          cow.motherName!,
+                        ),
                     ]),
                     const SizedBox(height: 15),
 
                     _buildDetailCard('Üretim ve Sağlık', [
                       _buildInfoRow(
                         Icons.water_drop,
-                        'Top. Üretilen Süt',
-                        '${cow.totalMilkProduced} Litre',
+                        'Günlük Üretim',
+                        '${stats['daily_milk']?.toStringAsFixed(1)} Litre',
+                        color: AppColors.black,
+                      ),
+                      _buildInfoRow(
+                        Icons.functions,
+                        'Tahmini Top. Süt',
+                        '${stats['total_milk']?.toStringAsFixed(0)} Litre',
                         color: AppColors.black,
                       ),
                       _buildInfoRow(
@@ -532,11 +541,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
                         color: cow.chronicDisease == 'Yok'
                             ? AppColors.primaryGreen
                             : AppColors.barnRed,
-                      ),
-                      _buildInfoRow(
-                        Icons.history,
-                        'İşlem Geçmişi',
-                        cow.medicalHistory,
                       ),
                     ]),
                     const SizedBox(height: 15),
@@ -552,8 +556,8 @@ class _CowsViewState extends ConsumerState<CowsView> {
                         children: [
                           Expanded(
                             child: _buildFinanceItem(
-                              'Kazandırdığı',
-                              '+₺${cow.totalIncome}',
+                              'Tahmini Kazancı',
+                              '+₺${stats['total_income']?.toStringAsFixed(0)}',
                               AppColors.primaryGreen,
                             ),
                           ),
@@ -564,8 +568,8 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           ),
                           Expanded(
                             child: _buildFinanceItem(
-                              'Maliyeti',
-                              '-₺${cow.totalCost}',
+                              'Tahmini Maliyeti',
+                              '-₺${stats['total_cost']?.toStringAsFixed(0)}',
                               AppColors.barnRed,
                             ),
                           ),
@@ -616,9 +620,10 @@ class _CowsViewState extends ConsumerState<CowsView> {
                         fontSize: 16,
                       ),
                     ),
-                    onPressed: () {
-                      setState(() => cow.status = 'Öldü');
-                      Navigator.pop(context);
+                    onPressed: () async {
+                      cow.status = 'Öldü';
+                      await ref.read(cowProvider.notifier).updateCow(cow);
+                      if (mounted) Navigator.pop(context);
                     },
                   ),
                 ),
@@ -647,7 +652,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
                     ),
                     onPressed: () {
                       Navigator.pop(context);
-                      _showSlaughterDialog(cow);
+                      _showSlaughterDialog(cow); // FİNANSA YANSIYACAK KISIM
                     },
                   ),
                 ),
@@ -659,7 +664,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
     );
   }
 
-  // Kesim Geliri Pop-up'ı
+  // Kesim Geliri Pop-up'ı (Doğrudan Finance Provider'ı tetikler)
   void _showSlaughterDialog(Cow cow) {
     final incomeCtrl = TextEditingController();
     showDialog(
@@ -705,25 +710,27 @@ class _CowsViewState extends ConsumerState<CowsView> {
               ),
             ),
             onPressed: () async {
-              // <-- async eklendi
-              // Kazancı ekle ve durumu değiştir
-              cow.status = 'Kesildi';
-              cow.totalIncome += double.tryParse(incomeCtrl.text) ?? 0.0;
+              if (incomeCtrl.text.isNotEmpty) {
+                // 1. Finansa Ekle (Backend İneği otomatik olarak 'Ayrıldı' yapar)
+                final success = await ref
+                    .read(financeProvider.notifier)
+                    .slaughterCow(
+                      cowId: cow.id.toString(),
+                      tagNumber: cow.tagNumber,
+                      price: double.tryParse(incomeCtrl.text) ?? 0,
+                    );
 
-              // Backend'e güncelleme at
-              final success = await ref
-                  .read(cowProvider.notifier)
-                  .updateCow(cow);
-
-              if (mounted) {
-                Navigator.pop(context); // Pop-up'ı kapat
-                if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('İşlem başarılı.'),
-                      backgroundColor: AppColors.primaryGreen,
-                    ),
-                  );
+                if (mounted) {
+                  Navigator.pop(context);
+                  if (success) {
+                    ref.invalidate(cowProvider); // UI inek listesini yenile
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Hayvan Ayrıldı, gelir Finansa işlendi!'),
+                        backgroundColor: AppColors.primaryGreen,
+                      ),
+                    );
+                  }
                 }
               }
             },
@@ -870,11 +877,19 @@ class _CowsViewState extends ConsumerState<CowsView> {
   @override
   Widget build(BuildContext context) {
     final cowAsyncValue = ref.watch(cowProvider);
+    final settingsAsyncValue = ref.watch(
+      settingsProvider,
+    ); // Ayarları dinliyoruz
+
+    Map<String, dynamic> settings = {};
+    if (settingsAsyncValue is AsyncData && settingsAsyncValue.value != null) {
+      settings = settingsAsyncValue.value!;
+    }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showCowForm(),
+        onPressed: () => cowAsyncValue.whenData((cows) => _showCowForm(cows)),
         backgroundColor: AppColors.strawYellow,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -892,12 +907,10 @@ class _CowsViewState extends ConsumerState<CowsView> {
       ),
       body: Column(
         children: [
-          // YENİ: KAMERAYLA KÜPE OKUMA ALANI
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: InkWell(
               onTap: () {
-                // TODO: Kamera barkod paketi buraya bağlanacak
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Kamera modülü yakında eklenecek!'),
@@ -949,7 +962,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
             ),
           ),
 
-          // YATAY KATEGORİ FİLTRESİ
           Container(
             height: 70,
             padding: const EdgeInsets.only(top: 10, bottom: 10, left: 16),
@@ -998,7 +1010,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
             ),
           ),
 
-          // İNEK KARTLARI LİSTESİ
           Expanded(
             child: cowAsyncValue.when(
               data: (cows) {
@@ -1021,17 +1032,14 @@ class _CowsViewState extends ConsumerState<CowsView> {
                   itemBuilder: (context, index) {
                     final cow = filteredCows[index];
                     return InkWell(
-                      onTap: () => _showCowDetails(cow),
+                      onTap: () => _showCowDetails(cow, settings, cows),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 16),
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: AppColors.white,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(
-                            color: AppColors.black,
-                            width: 3,
-                          ), // Kalın Premium Kontür
+                          border: Border.all(color: AppColors.black, width: 3),
                           boxShadow: const [
                             BoxShadow(
                               color: Colors.black12,

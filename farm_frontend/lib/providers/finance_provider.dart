@@ -5,11 +5,11 @@ import 'package:dio/dio.dart';
 // --- FİNANS VERİ MODELİ ---
 class FinancialTransaction {
   String id;
-  String title; // Backend'de 'description'
-  String type; // Backend'de 'gelir' veya 'gider'
+  String title;
+  String type;
   String category;
   double amount;
-  DateTime date; // Backend'de 'transaction_date'
+  DateTime date;
 
   FinancialTransaction({
     required this.id,
@@ -27,8 +27,9 @@ class FinancialTransaction {
       type: json['transaction_type'] == 'gelir' ? 'Gelir' : 'Gider',
       category: json['category'] ?? 'Diğer',
       amount: double.tryParse(json['amount'].toString()) ?? 0.0,
-      date: json['transaction_date'] != null
-          ? DateTime.parse(json['transaction_date'])
+      // SAAT SORUNU ÇÖZÜMÜ: transaction_date yerine direkt oluşturulma anını (created_at) alıyoruz
+      date: json['created_at'] != null
+          ? DateTime.parse(json['created_at']).toLocal()
           : DateTime.now(),
     );
   }
@@ -43,17 +44,12 @@ class FinanceNotifier extends AsyncNotifier<List<FinancialTransaction>> {
     return _fetchTransactions();
   }
 
-  // Tüm işlemleri getir (GET)
   Future<List<FinancialTransaction>> _fetchTransactions() async {
     try {
       final response = await _dioClient.dio.get('finances');
       if (response.statusCode == 200) {
-        final List<dynamic> data = response.data;
-        // Yeniden eskiye doğru sıralamak için listeyi döndürüyoruz (Eğer backend sıralamadıysa)
-        return data
+        return (response.data as List)
             .map((json) => FinancialTransaction.fromJson(json))
-            .toList()
-            .reversed
             .toList();
       }
       return [];
@@ -63,9 +59,8 @@ class FinanceNotifier extends AsyncNotifier<List<FinancialTransaction>> {
     }
   }
 
-  // Yeni gelir/gider ekle (POST)
   Future<bool> addTransaction({
-    required String type, // 'gelir' veya 'gider'
+    required String type,
     required String category,
     required double amount,
     required String description,
@@ -81,20 +76,48 @@ class FinanceNotifier extends AsyncNotifier<List<FinancialTransaction>> {
           'transaction_date': DateTime.now().toIso8601String(),
         },
       );
-
       if (response.statusCode == 201) {
-        // İşlem başarılıysa ekranı anında güncellemek için listeye ekliyoruz
-        final newTransaction = FinancialTransaction.fromJson(
-          response.data['transaction'],
-        );
-        state = AsyncData([newTransaction, ...?state.value]);
+        ref.invalidateSelf();
         return true;
       }
       return false;
     } catch (e) {
-      if (e is DioException) {
-        print('Finans Ekleme Hatası: ${e.response?.data}');
+      return false;
+    }
+  }
+
+  Future<bool> sellMilk({required double liters, required double price}) async {
+    try {
+      final response = await _dioClient.dio.post(
+        'finances/milk-sale',
+        data: {'liters': liters, 'price': price},
+      );
+      if (response.statusCode == 201) {
+        ref.invalidateSelf();
+        return true;
       }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<bool> slaughterCow({
+    required String cowId,
+    required String tagNumber,
+    required double price,
+  }) async {
+    try {
+      final response = await _dioClient.dio.post(
+        'finances/slaughter',
+        data: {'cow_id': cowId, 'tag_number': tagNumber, 'price': price},
+      );
+      if (response.statusCode == 201) {
+        ref.invalidateSelf();
+        return true;
+      }
+      return false;
+    } catch (e) {
       return false;
     }
   }

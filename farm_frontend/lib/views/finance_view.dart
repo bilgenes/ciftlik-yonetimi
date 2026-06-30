@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/app_colors.dart';
 import '../core/ui_helper.dart';
 import '../providers/finance_provider.dart';
+import '../providers/cow_provider.dart';
+import '../providers/stock_provider.dart';
+import '../models/cow.dart';
 
 class FinanceView extends ConsumerStatefulWidget {
   const FinanceView({super.key});
@@ -24,19 +27,78 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
   ];
   String _selectedFilter = 'Aylık';
   String _customDateText = '';
+  DateTimeRange? _pickedDateRange;
 
-  // Dinamik Hesaplama Fonksiyonları
-  double _getTotalIncome(List<FinancialTransaction> transactions) =>
-      transactions
-          .where((t) => t.type == 'Gelir')
-          .fold(0, (sum, t) => sum + t.amount);
+  // --- ZAMAN FİLTRESİ MOTORU ---
+  List<FinancialTransaction> _getFilteredTransactions(
+    List<FinancialTransaction> txs,
+  ) {
+    final now = DateTime.now();
+    return txs.where((t) {
+      if (_selectedFilter == 'Günlük') {
+        return t.date.year == now.year &&
+            t.date.month == now.month &&
+            t.date.day == now.day;
+      } else if (_selectedFilter == 'Haftalık') {
+        return now.difference(t.date).inDays <= 7;
+      } else if (_selectedFilter == 'Aylık') {
+        return now.difference(t.date).inDays <= 30;
+      } else if (_selectedFilter == 'Yıllık') {
+        return now.difference(t.date).inDays <= 365;
+      } else if (_selectedFilter == 'Tarih Seç' && _pickedDateRange != null) {
+        return t.date.isAfter(
+              _pickedDateRange!.start.subtract(const Duration(days: 1)),
+            ) &&
+            t.date.isBefore(_pickedDateRange!.end.add(const Duration(days: 1)));
+      }
+      return true; // Varsayılan olarak tümünü göster
+    }).toList();
+  }
 
-  double _getTotalExpense(List<FinancialTransaction> transactions) =>
-      transactions
-          .where((t) => t.type == 'Gider')
-          .fold(0, (sum, t) => sum + t.amount);
+  double _getTotalIncome(List<FinancialTransaction> txs) =>
+      txs.where((t) => t.type == 'Gelir').fold(0, (sum, t) => sum + t.amount);
+  double _getTotalExpense(List<FinancialTransaction> txs) =>
+      txs.where((t) => t.type == 'Gider').fold(0, (sum, t) => sum + t.amount);
 
-  // --- POPUP FORMLAR (API'YE BAĞLANDI) ---
+  // --- YENİ: 6 AYLIK GELİR/GİDER ÇİZGİ GRAFİĞİ VERİSİ ---
+  Map<String, List<double>> _getMonthlyChartData(
+    List<FinancialTransaction> txs,
+  ) {
+    if (txs.isEmpty)
+      return {
+        'income': [0, 0, 0, 0, 0, 0],
+        'expense': [0, 0, 0, 0, 0, 0],
+      };
+
+    List<double> incomes = List.filled(6, 0.0);
+    List<double> expenses = List.filled(6, 0.0);
+    DateTime now = DateTime.now();
+
+    for (var t in txs) {
+      int monthDiff = (now.year - t.date.year) * 12 + now.month - t.date.month;
+      if (monthDiff >= 0 && monthDiff < 6) {
+        if (t.type == 'Gelir') {
+          incomes[5 - monthDiff] += t.amount;
+        } else {
+          expenses[5 - monthDiff] += t.amount;
+        }
+      }
+    }
+
+    // Değerleri 0 ile 1 arasına orantıla (Grafiğe sığması için)
+    double maxVal = [...incomes, ...expenses].reduce((a, b) => a > b ? a : b);
+    if (maxVal <= 0)
+      return {
+        'income': [0, 0, 0, 0, 0, 0],
+        'expense': [0, 0, 0, 0, 0, 0],
+      };
+
+    return {
+      'income': incomes.map((v) => v / maxVal).toList(),
+      'expense': expenses.map((v) => v / maxVal).toList(),
+    };
+  }
+
   void _showManualTransactionForm({required bool isIncome}) {
     final titleCtrl = TextEditingController();
     final amountCtrl = TextEditingController();
@@ -49,7 +111,7 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
           top: 24,
           left: 24,
           right: 24,
-          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
         ),
         decoration: const BoxDecoration(
           color: AppColors.background,
@@ -87,7 +149,6 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
                 ),
               ),
               const SizedBox(height: 20),
-
               TextField(
                 controller: titleCtrl,
                 decoration: _premiumInputDeco(
@@ -105,7 +166,6 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
                 ),
               ),
               const SizedBox(height: 30),
-
               SizedBox(
                 width: double.infinity,
                 height: 60,
@@ -130,16 +190,7 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
                             amount: double.tryParse(amountCtrl.text) ?? 0,
                             description: titleCtrl.text,
                           );
-
-                      if (mounted && success) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('İşlem kaydedildi.'),
-                            backgroundColor: AppColors.primaryGreen,
-                          ),
-                        );
-                      }
+                      if (mounted && success) Navigator.pop(context);
                     }
                   },
                   child: const Text(
@@ -170,7 +221,7 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
           top: 24,
           left: 24,
           right: 24,
-          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
         ),
         decoration: const BoxDecoration(
           color: AppColors.background,
@@ -221,7 +272,7 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
                 controller: priceCtrl,
                 keyboardType: TextInputType.number,
                 decoration: _premiumInputDeco(
-                  'Toplam Ücret (₺)',
+                  'Toplam Kazanç (₺)',
                   Icons.payments_rounded,
                 ),
               ),
@@ -242,18 +293,16 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
                         priceCtrl.text.isNotEmpty) {
                       final success = await ref
                           .read(financeProvider.notifier)
-                          .addTransaction(
-                            type: 'gelir',
-                            category: 'Süt Satışı',
-                            amount: double.tryParse(priceCtrl.text) ?? 0,
-                            description: '${amountCtrl.text} Litre Süt Satışı',
+                          .sellMilk(
+                            liters: double.tryParse(amountCtrl.text) ?? 0,
+                            price: double.tryParse(priceCtrl.text) ?? 0,
                           );
-
                       if (mounted && success) {
+                        ref.invalidate(stockProvider);
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Satış kaydedildi.'),
+                            content: Text('Satış kaydedildi, stoktan düşüldü!'),
                             backgroundColor: AppColors.primaryGreen,
                           ),
                         );
@@ -277,136 +326,153 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
     );
   }
 
-  void _showSlaughterSaleForm() {
+  void _showSlaughterSaleForm(List<Cow> activeCows) {
+    if (activeCows.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sistemde aktif inek bulunamadı.'),
+          backgroundColor: AppColors.barnRed,
+        ),
+      );
+      return;
+    }
+
     final priceCtrl = TextEditingController();
-    // Geliştirme notu: İleride bu listeyi cowProvider üzerinden canlı ineklerle de doldurabilirsin.
-    String selectedCow = 'TR-9988 Benekli';
+    Cow selectedCow = activeCows.first;
 
     UiHelper.showPremiumBottomSheet(
       context: context,
-      child: Container(
-        padding: EdgeInsets.only(
-          top: 24,
-          left: 24,
-          right: 24,
-          bottom: 24 + MediaQuery.of(context).viewInsets.bottom,
-        ),
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(40),
-            topRight: Radius.circular(40),
-          ),
-          border: Border(
-            top: BorderSide(color: AppColors.black, width: 4),
-            left: BorderSide(color: AppColors.black, width: 4),
-            right: BorderSide(color: AppColors.black, width: 4),
-          ),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  width: 50,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: AppColors.black.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(10),
+      child: StatefulBuilder(
+        builder: (context, setModalState) {
+          return Container(
+            padding: EdgeInsets.only(
+              top: 24,
+              left: 24,
+              right: 24,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
+            decoration: const BoxDecoration(
+              color: AppColors.background,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(40),
+                topRight: Radius.circular(40),
+              ),
+              border: Border(
+                top: BorderSide(color: AppColors.black, width: 4),
+                left: BorderSide(color: AppColors.black, width: 4),
+                right: BorderSide(color: AppColors.black, width: 4),
+              ),
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 50,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: AppColors.black.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                '🔪 İnek Kesim Geliri',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Comfortaa',
-                ),
-              ),
-              const SizedBox(height: 20),
-              DropdownButtonFormField<String>(
-                value: selectedCow,
-                decoration: _premiumInputDeco('Kesilen Hayvan', Icons.pets),
-                items: ['TR-9988 Benekli', 'TR-1122 Sarıkız']
-                    .map(
-                      (e) => DropdownMenuItem(
-                        value: e,
-                        child: Text(
-                          e,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '🔪 İnek Kesim Geliri',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Comfortaa',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  DropdownButtonFormField<Cow>(
+                    value: selectedCow,
+                    decoration: _premiumInputDeco(
+                      'Kesilecek Hayvan',
+                      Icons.pets,
+                    ),
+                    items: activeCows
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(
+                              '${c.tagNumber} ${c.name ?? ''}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) => setModalState(() => selectedCow = val!),
+                  ),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: priceCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: _premiumInputDeco(
+                      'Elde Edilen Gelir (₺)',
+                      Icons.monetization_on_rounded,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 60,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          side: const BorderSide(
+                            color: AppColors.primaryGreen,
+                            width: 3,
+                          ),
                         ),
                       ),
-                    )
-                    .toList(),
-                onChanged: (val) => selectedCow = val!,
-              ),
-              const SizedBox(height: 15),
-              TextField(
-                controller: priceCtrl,
-                keyboardType: TextInputType.number,
-                decoration: _premiumInputDeco(
-                  'Elde Edilen Gelir (₺)',
-                  Icons.monetization_on_rounded,
-                ),
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 60,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      side: const BorderSide(
-                        color: AppColors.primaryGreen,
-                        width: 3,
+                      onPressed: () async {
+                        if (priceCtrl.text.isNotEmpty) {
+                          final success = await ref
+                              .read(financeProvider.notifier)
+                              .slaughterCow(
+                                cowId: selectedCow.id.toString(),
+                                tagNumber: selectedCow.tagNumber,
+                                price: double.tryParse(priceCtrl.text) ?? 0,
+                              );
+                          if (mounted && success) {
+                            ref.invalidate(cowProvider);
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Hayvan Ayrıldı, gelir işlendi!'),
+                                backgroundColor: AppColors.primaryGreen,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: const Text(
+                        'Geliri Kaydet',
+                        style: TextStyle(
+                          color: AppColors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
                     ),
                   ),
-                  onPressed: () async {
-                    if (priceCtrl.text.isNotEmpty) {
-                      final success = await ref
-                          .read(financeProvider.notifier)
-                          .addTransaction(
-                            type: 'gelir',
-                            category: 'Hayvan Kesimi',
-                            amount: double.tryParse(priceCtrl.text) ?? 0,
-                            description: '$selectedCow Kesimi',
-                          );
-
-                      if (mounted && success) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Kesim geliri kaydedildi.'),
-                            backgroundColor: AppColors.primaryGreen,
-                          ),
-                        );
-                      }
-                    }
-                  },
-                  child: const Text(
-                    'Geliri Kaydet',
-                    style: TextStyle(
-                      color: AppColors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  // --- PREMIUM VE TÜRKÇE TARİH SEÇİCİ ---
   Future<void> _pickPremiumDateRange() async {
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
@@ -437,17 +503,16 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
         );
       },
     );
-
     if (picked != null) {
       setState(() {
         _selectedFilter = 'Tarih Seç';
+        _pickedDateRange = picked;
         _customDateText =
-            '${DateFormat('dd MMM', 'tr_TR').format(picked.start)} - ${DateFormat('dd MMM yyyy', 'tr_TR').format(picked.end)}';
+            '${DateFormat('dd MMM').format(picked.start)} - ${DateFormat('dd MMM yyyy').format(picked.end)}';
       });
     }
   }
 
-  // --- UI YARDIMCILARI ---
   InputDecoration _premiumInputDeco(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
@@ -584,8 +649,13 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
 
   @override
   Widget build(BuildContext context) {
-    // Tüm verileri Riverpod ile dinliyoruz
-    final financeAsyncValue = ref.watch(financeProvider);
+    final financeAsync = ref.watch(financeProvider);
+    final cowAsync = ref.watch(cowProvider);
+
+    List<Cow> activeCows = [];
+    cowAsync.whenData(
+      (cows) => activeCows = cows.where((c) => c.status == 'Aktif').toList(),
+    );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -593,15 +663,14 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
         children: [
           _buildCustomTabBar(),
           Expanded(
-            child: financeAsyncValue.when(
+            child: financeAsync.when(
               loading: () => const Center(
                 child: CircularProgressIndicator(color: AppColors.primaryGreen),
               ),
-              error: (err, stack) =>
-                  Center(child: Text('Bir hata oluştu: $err')),
+              error: (err, stack) => Center(child: Text('Hata: $err')),
               data: (transactions) {
                 return _currentTab == 0
-                    ? _buildOperationsTab(transactions)
+                    ? _buildOperationsTab(transactions, activeCows)
                     : _buildAnalysisTab(transactions);
               },
             ),
@@ -611,7 +680,14 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
     );
   }
 
-  Widget _buildOperationsTab(List<FinancialTransaction> transactions) {
+  Widget _buildOperationsTab(
+    List<FinancialTransaction> transactions,
+    List<Cow> activeCows,
+  ) {
+    List<FinancialTransaction> recentTxs = transactions.length > 5
+        ? transactions.sublist(0, 5)
+        : transactions;
+
     return ListView(
       padding: EdgeInsets.only(
         left: 20,
@@ -661,42 +737,60 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
               'İnek Kesimi',
               Icons.content_cut_rounded,
               AppColors.black,
-              _showSlaughterSaleForm,
+              () => _showSlaughterSaleForm(activeCows),
             ),
           ],
         ),
 
         const SizedBox(height: 35),
+
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Container(
-              width: 6,
-              height: 24,
-              decoration: BoxDecoration(
-                color: AppColors.black,
-                borderRadius: BorderRadius.circular(10),
-              ),
+            Row(
+              children: [
+                Container(
+                  width: 6,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: AppColors.black,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'Son İşlemler',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.black,
+                    fontFamily: 'Comfortaa',
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            const Text(
-              'Son Finansal İşlemler',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.black,
-                fontFamily: 'Comfortaa',
+            if (transactions.isNotEmpty)
+              TextButton(
+                onPressed: () => _openAllTransactionsPage(transactions),
+                child: const Text(
+                  'Tümünü Gör',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryGreen,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
               ),
-            ),
           ],
         ),
         const SizedBox(height: 15),
 
-        if (transactions.isEmpty)
+        if (recentTxs.isEmpty)
           const Padding(
-            padding: EdgeInsets.all(20.0),
+            padding: EdgeInsets.all(20),
             child: Center(
               child: Text(
-                'Henüz kaydedilmiş bir finans işlemi bulunmuyor.',
+                'Henüz kaydedilmiş işlem yok.',
                 style: TextStyle(
                   color: Colors.grey,
                   fontWeight: FontWeight.bold,
@@ -705,91 +799,161 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
             ),
           ),
 
-        ...transactions
-            .map(
-              (t) => Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.black, width: 2.5),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: t.type == 'Gelir'
-                            ? AppColors.primaryGreen.withOpacity(0.15)
-                            : AppColors.barnRed.withOpacity(0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        t.type == 'Gelir'
-                            ? Icons.trending_up_rounded
-                            : Icons.trending_down_rounded,
-                        color: t.type == 'Gelir'
-                            ? AppColors.primaryGreen
-                            : AppColors.barnRed,
-                      ),
-                    ),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            t.title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: AppColors.black,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${t.category} • ${DateFormat('dd MMM yyyy', 'tr_TR').format(t.date)}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                              color: AppColors.black.withOpacity(0.5),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      '${t.type == 'Gelir' ? '+' : '-'}₺${t.amount.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: t.type == 'Gelir'
-                            ? AppColors.primaryGreen
-                            : AppColors.barnRed,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-            .toList(),
+        ...recentTxs.map((t) => _buildTransactionCard(t)).toList(),
       ],
     );
   }
 
-  Widget _buildAnalysisTab(List<FinancialTransaction> transactions) {
-    double totalIncome = _getTotalIncome(transactions);
-    double totalExpense = _getTotalExpense(transactions);
-    double netProfit = totalIncome - totalExpense;
+  Widget _buildTransactionCard(FinancialTransaction t) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.black, width: 2.5),
+        boxShadow: const [
+          BoxShadow(color: Colors.black, blurRadius: 4, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: t.type == 'Gelir'
+                  ? AppColors.primaryGreen.withOpacity(0.15)
+                  : AppColors.barnRed.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              t.type == 'Gelir'
+                  ? Icons.trending_up_rounded
+                  : Icons.trending_down_rounded,
+              color: t.type == 'Gelir'
+                  ? AppColors.primaryGreen
+                  : AppColors.barnRed,
+            ),
+          ),
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: AppColors.black,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${t.category} • ${DateFormat('HH:mm', 'tr_TR').format(t.date)}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                    color: AppColors.black.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '${t.type == 'Gelir' ? '+' : '-'}₺${t.amount.toStringAsFixed(0)}',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: t.type == 'Gelir'
+                  ? AppColors.primaryGreen
+                  : AppColors.barnRed,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openAllTransactionsPage(List<FinancialTransaction> txs) {
+    Map<String, List<FinancialTransaction>> grouped = {};
+    for (var t in txs) {
+      String dateKey = DateFormat('dd MMMM yyyy', 'tr_TR').format(t.date);
+      if (!grouped.containsKey(dateKey)) grouped[dateKey] = [];
+      grouped[dateKey]!.add(t);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) {
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(
+              backgroundColor: AppColors.background,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: AppColors.black,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+              title: const Text(
+                'Tüm Finans Geçmişi',
+                style: TextStyle(
+                  color: AppColors.black,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Comfortaa',
+                ),
+              ),
+            ),
+            body: ListView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 10,
+                bottom: 20 + MediaQuery.of(context).padding.bottom,
+              ),
+              children: grouped.entries.map((entry) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        entry.key,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.black,
+                        ),
+                      ),
+                    ),
+                    ...entry.value
+                        .map((t) => _buildTransactionCard(t))
+                        .toList(),
+                  ],
+                );
+              }).toList(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAnalysisTab(List<FinancialTransaction> allTransactions) {
+    // FİLTRELEME İŞLEMİ
+    final filteredTransactions = _getFilteredTransactions(allTransactions);
+
+    double totalIn = _getTotalIncome(filteredTransactions);
+    double totalOut = _getTotalExpense(filteredTransactions);
+    double netProfit = totalIn - totalOut;
+
+    // GRAFİK VERİSİ (Her zaman tüm işlemlere göre son 6 ayı baz alır)
+    final chartData = _getMonthlyChartData(allTransactions);
 
     return ListView(
       padding: EdgeInsets.only(
@@ -799,6 +963,7 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
         bottom: 20 + MediaQuery.of(context).padding.bottom,
       ),
       children: [
+        // ZAMAN FİLTRELERİ EKLENDİ
         SizedBox(
           height: 45,
           child: ListView.builder(
@@ -937,7 +1102,7 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
                       ),
                     ),
                     Text(
-                      '₺${totalIncome.toStringAsFixed(0)}',
+                      '₺${totalIn.toStringAsFixed(0)}',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -980,7 +1145,7 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
                       ),
                     ),
                     Text(
-                      '₺${totalExpense.toStringAsFixed(0)}',
+                      '₺${totalOut.toStringAsFixed(0)}',
                       style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
@@ -993,10 +1158,10 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
             ),
           ],
         ),
-        const SizedBox(height: 35),
 
+        const SizedBox(height: 35),
         const Text(
-          'Gelir & Gider Karşılaştırması',
+          'Aylık Gelir-Gider Çizgisi (Son 6 Ay)',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -1006,132 +1171,13 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
         ),
         const SizedBox(height: 15),
 
+        // YENİ: ÇİZGİ GRAFİĞİ
         Container(
           height: 250,
+          width: double.infinity,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(30),
-            border: Border.all(color: AppColors.black, width: 3),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      '₺${totalIncome.toInt()}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryGreen,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: FractionallySizedBox(
-                          heightFactor: totalIncome == 0
-                              ? 0
-                              : (totalIncome >= totalExpense
-                                    ? 1.0
-                                    : (totalIncome / totalExpense)),
-                          child: Container(
-                            width: 60,
-                            decoration: BoxDecoration(
-                              gradient: AppColors.greenGradient,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: AppColors.black,
-                                width: 2.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'GELİR',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                width: 2,
-                height: double.infinity,
-                color: AppColors.black,
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    Text(
-                      '₺${totalExpense.toInt()}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.barnRed,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.bottomCenter,
-                        child: FractionallySizedBox(
-                          heightFactor: totalExpense == 0
-                              ? 0
-                              : (totalExpense >= totalIncome
-                                    ? 1.0
-                                    : (totalExpense / totalIncome)),
-                          child: Container(
-                            width: 60,
-                            decoration: BoxDecoration(
-                              gradient: AppColors.redGradient,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: AppColors.black,
-                                width: 2.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'GİDER',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 35),
-        const Text(
-          'Aylık Kar Trendi (Örnek Görsel)',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: AppColors.black,
-            fontFamily: 'Comfortaa',
-          ),
-        ),
-        const SizedBox(height: 15),
-
-        Container(
-          height: 200,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: AppColors.black,
             borderRadius: BorderRadius.circular(30),
             border: Border.all(color: AppColors.black, width: 3),
             boxShadow: const [
@@ -1142,76 +1188,148 @@ class _FinanceViewState extends ConsumerState<FinanceView> {
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(27),
-            child: CustomPaint(painter: TrendLinePainter()),
+          child: CustomPaint(
+            painter: IncomeExpenseLinePainter(
+              chartData['income']!,
+              chartData['expense']!,
+            ),
           ),
         ),
+
+        // Grafik Lejantı
+        Padding(
+          padding: const EdgeInsets.only(top: 15),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 15,
+                height: 15,
+                decoration: const BoxDecoration(
+                  color: AppColors.primaryGreen,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Text(
+                'Gelir',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 20),
+              Container(
+                width: 15,
+                height: 15,
+                decoration: const BoxDecoration(
+                  color: AppColors.barnRed,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 5),
+              const Text(
+                'Gider',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+
         const SizedBox(height: 30),
       ],
     );
   }
 }
 
-// Görsel trend tablosu aynı kaldı
-class TrendLinePainter extends CustomPainter {
+// YEPYENİ GELİR/GİDER ÇİZGİ GRAFİĞİ RESSAMI
+class IncomeExpenseLinePainter extends CustomPainter {
+  final List<double> incomeData;
+  final List<double> expenseData;
+  IncomeExpenseLinePainter(this.incomeData, this.expenseData);
+
   @override
   void paint(Canvas canvas, Size size) {
-    final data = [0.3, 0.5, 0.4, 0.7, 0.6, 0.9];
-    final paintLine = Paint()
+    if (incomeData.isEmpty || expenseData.isEmpty) return;
+
+    double stepX = size.width / (incomeData.length - 1);
+
+    // Gelir Çizgisi (Yeşil)
+    final incomePaint = Paint()
       ..color = AppColors.primaryGreen
       ..strokeWidth = 4
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-    final path = Path();
-    final fillPath = Path();
-    double stepX = size.width / (data.length - 1);
+    final incomePath = Path()
+      ..moveTo(0, size.height - (incomeData[0] * size.height));
 
-    path.moveTo(0, size.height - (data[0] * size.height));
-    fillPath.moveTo(0, size.height);
-    fillPath.lineTo(0, size.height - (data[0] * size.height));
+    // Gider Çizgisi (Kırmızı)
+    final expensePaint = Paint()
+      ..color = AppColors.barnRed
+      ..strokeWidth = 4
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+    final expensePath = Path()
+      ..moveTo(0, size.height - (expenseData[0] * size.height));
 
-    for (int i = 0; i < data.length - 1; i++) {
+    for (int i = 0; i < incomeData.length - 1; i++) {
       double x1 = i * stepX;
-      double y1 = size.height - (data[i] * size.height);
       double x2 = (i + 1) * stepX;
-      double y2 = size.height - (data[i + 1] * size.height);
-      double controlPointX = x1 + (x2 - x1) / 2;
-      path.cubicTo(controlPointX, y1, controlPointX, y2, x2, y2);
-      fillPath.cubicTo(controlPointX, y1, controlPointX, y2, x2, y2);
+
+      // Gelir Eğrisi
+      double y1Inc = size.height - (incomeData[i] * size.height);
+      double y2Inc = size.height - (incomeData[i + 1] * size.height);
+      incomePath.cubicTo(
+        x1 + (x2 - x1) / 2,
+        y1Inc,
+        x1 + (x2 - x1) / 2,
+        y2Inc,
+        x2,
+        y2Inc,
+      );
+
+      // Gider Eğrisi
+      double y1Exp = size.height - (expenseData[i] * size.height);
+      double y2Exp = size.height - (expenseData[i + 1] * size.height);
+      expensePath.cubicTo(
+        x1 + (x2 - x1) / 2,
+        y1Exp,
+        x1 + (x2 - x1) / 2,
+        y2Exp,
+        x2,
+        y2Exp,
+      );
     }
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
 
-    final gradient = LinearGradient(
-      colors: [AppColors.primaryGreen.withOpacity(0.5), Colors.transparent],
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    ).createShader(Rect.fromLTRB(0, 0, size.width, size.height));
-    final paintFill = Paint()
-      ..shader = gradient
-      ..style = PaintingStyle.fill;
+    canvas.drawPath(incomePath, incomePaint);
+    canvas.drawPath(expensePath, expensePaint);
 
-    canvas.drawPath(fillPath, paintFill);
-    canvas.drawPath(path, paintLine);
-
-    final paintDot = Paint()
+    // Noktalar
+    final dotPaint = Paint()
       ..color = AppColors.white
       ..style = PaintingStyle.fill;
-    for (int i = 0; i < data.length; i++) {
+    for (int i = 0; i < incomeData.length; i++) {
       canvas.drawCircle(
-        Offset(i * stepX, size.height - (data[i] * size.height)),
+        Offset(i * stepX, size.height - (incomeData[i] * size.height)),
         6,
-        paintLine,
+        incomePaint,
       );
       canvas.drawCircle(
-        Offset(i * stepX, size.height - (data[i] * size.height)),
+        Offset(i * stepX, size.height - (incomeData[i] * size.height)),
         4,
-        paintDot,
+        dotPaint,
+      );
+
+      canvas.drawCircle(
+        Offset(i * stepX, size.height - (expenseData[i] * size.height)),
+        6,
+        expensePaint,
+      );
+      canvas.drawCircle(
+        Offset(i * stepX, size.height - (expenseData[i] * size.height)),
+        4,
+        dotPaint,
       );
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

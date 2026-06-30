@@ -17,33 +17,18 @@ class StockController extends Controller
         $this->financeService = $financeService;
     }
 
-    // YENİ EKLENEN GET METODU (Stok Durumu ve Geçmişi Getirir)
+    // Stokları Ekrana Getirme Metodu (Bunu eklemeliyiz ki ekran dolsun)
     public function index(): JsonResponse
     {
-        // 1. İşlem Geçmişi (En yeni 50 işlemi getir)
-        $transactions = StockTransaction::orderBy('transaction_date', 'desc')
-            ->orderBy('id', 'desc')
-            ->take(50)
-            ->get();
+        $transactions = StockTransaction::orderBy('transaction_date', 'desc')->take(50)->get();
 
-        // Veritabanı boşsa arayüz tasarımı bozulmasın diye varsayılan veriler döndür
-        if ($transactions->isEmpty()) {
-            return response()->json([
-                'current_stocks' => ['Süt' => 850, 'Yem' => 2500, 'Saman' => 120, 'Silaj' => 5200],
-                'transactions' => []
-            ]);
-        }
-
-        // 2. Güncel Stok Hesaplama (Giren - Çıkan)
         $items = ['süt', 'yem', 'saman', 'silaj'];
         $currentStocks = [];
 
         foreach ($items as $item) {
             $in = StockTransaction::where('item_name', $item)->where('transaction_type', 'in')->sum('quantity');
             $out = StockTransaction::where('item_name', $item)->where('transaction_type', 'out')->sum('quantity');
-
-            $stock = $in - $out;
-            $currentStocks[ucfirst($item)] = $stock > 0 ? $stock : 0; // Negatife düşmesin
+            $currentStocks[ucfirst($item)] = max(0, $in - $out);
         }
 
         return response()->json([
@@ -52,8 +37,7 @@ class StockController extends Controller
         ]);
     }
 
-    // MEVCUT POST METODU
-    public function purchase(Request $request)
+    public function purchase(Request $request): JsonResponse
     {
         $data = $request->validate([
             'item_name' => 'required|string',
@@ -62,24 +46,25 @@ class StockController extends Controller
             'transaction_date' => 'required|date'
         ]);
 
-        $data['item_name'] = strtolower($data['item_name']); // Her zaman küçük harfle kaydet
-        $data['transaction_type'] = 'in'; // Alım
+        $data['item_name'] = strtolower($data['item_name']);
+        $data['transaction_type'] = 'in';
         $data['unit_price'] = $data['quantity'] > 0 ? ($data['total_price'] / $data['quantity']) : 0;
 
         // 1. Stoğa Ekle
         $stock = StockTransaction::create($data);
 
-        // 2. OTOMATİK FİNANSA GİDER YAZ (Sadece maliyet 0'dan büyükse, yani 'Üretim' değilse)
+        // 2. OTOMATİK FİNANSA GİDER YAZ (Sadece Alım ise, yani maliyet 0'dan büyükse)
         if ($data['total_price'] > 0) {
+            $unit = $data['item_name'] == 'saman' ? 'balya' : 'kg/litre';
             $this->financeService->addTransaction([
                 'transaction_type' => 'gider',
                 'category' => 'stok_alimi',
                 'amount' => $data['total_price'],
-                'description' => $data['quantity'] . ' birim ' . $data['item_name'] . ' alımı',
+                'description' => $data['quantity'] . ' ' . $unit . ' ' . ucfirst($data['item_name']) . ' alımı',
                 'transaction_date' => $data['transaction_date']
             ]);
         }
 
-        return response()->json(['message' => 'Stok başarıyla eklendi.', 'transaction' => $stock], 201);
+        return response()->json(['message' => 'Stok eklendi ve finansa yansıtıldı.', 'transaction' => $stock], 201);
     }
 }
