@@ -17,7 +17,6 @@ class CowsView extends ConsumerStatefulWidget {
 }
 
 class _CowsViewState extends ConsumerState<CowsView> {
-  // Ayrılanlar sekmesi tamamen kaldırıldı
   final List<String> _categories = [
     'Tümü',
     'Süt Veren İnekler',
@@ -29,69 +28,39 @@ class _CowsViewState extends ConsumerState<CowsView> {
   String _selectedCategory = 'Tümü';
 
   List<Cow> _getFilteredCows(List<Cow> cows) {
-    if (_selectedCategory == 'Tümü') {
+    if (_selectedCategory == 'Tümü')
       return cows.where((c) => c.status == 'Aktif').toList();
-    }
     return cows
         .where((c) => c.category == _selectedCategory && c.status == 'Aktif')
         .toList();
   }
 
-  // --- AKILLI HESAPLAMA MOTORU ---
-  // Ayarlardan gelen katsayılar ile ineğin yaşını çarparak gerçek verileri üretir
+  // Sadece Süt Üretimini Hesaplar
   Map<String, double> _calculateDynamicStats(
     Cow cow,
     Map<String, dynamic> settings,
   ) {
-    String prefix = cow.category.replaceAll(' ', '_').toLowerCase();
-    prefix = prefix
+    String prefix = cow.category
+        .replaceAll(' ', '_')
+        .toLowerCase()
         .replaceAll('ı', 'i')
         .replaceAll('ğ', 'g')
         .replaceAll('ü', 'u')
         .replaceAll('ş', 's')
         .replaceAll('ö', 'o')
-        .replaceAll('ç', 'c'); // Türkçe karakter temizliği
+        .replaceAll('ç', 'c');
 
     double prodMilk =
         double.tryParse(settings['${prefix}_prodMilk']?.toString() ?? '0') ?? 0;
-    double consMilk =
-        double.tryParse(settings['${prefix}_consMilk']?.toString() ?? '0') ?? 0;
-    double feed =
-        double.tryParse(settings['${prefix}_feed']?.toString() ?? '0') ?? 0;
-    double straw =
-        double.tryParse(settings['${prefix}_straw']?.toString() ?? '0') ?? 0;
-    double silage =
-        double.tryParse(settings['${prefix}_silage']?.toString() ?? '0') ?? 0;
-
-    double milkPrice =
-        double.tryParse(settings['milk_price']?.toString() ?? '0') ?? 0;
-    double feedPrice =
-        double.tryParse(settings['feed_price']?.toString() ?? '0') ?? 0;
-    double strawPrice =
-        double.tryParse(settings['straw_price']?.toString() ?? '0') ?? 0;
-    double silagePrice =
-        double.tryParse(settings['silage_price']?.toString() ?? '0') ?? 0;
-
-    double dailyIncome = prodMilk * milkPrice;
-    double dailyCost =
-        (consMilk * milkPrice) +
-        (feed * feedPrice) +
-        (straw * strawPrice) +
-        (silage * silagePrice);
 
     int days = cow.ageInDays > 0 ? cow.ageInDays : 1;
 
     return {
       'daily_milk': prodMilk,
-      'total_milk': prodMilk * days,
-      'daily_income': dailyIncome,
-      'total_income': dailyIncome * days,
-      'daily_cost': dailyCost,
-      'total_cost': dailyCost * days,
+      'total_milk': prodMilk * days, // Hayatı boyunca ürettiği ortalama
     };
   }
 
-  // --- ORTAK EKLEME / DÜZENLEME FORMU ---
   void _showCowForm(List<Cow> allCows, {Cow? cowToEdit}) {
     final isEditing = cowToEdit != null;
     final formKey = GlobalKey<FormState>();
@@ -111,12 +80,17 @@ class _CowsViewState extends ConsumerState<CowsView> {
     final notesCtrl = TextEditingController(
       text: isEditing ? cowToEdit.notes : '',
     );
+    // YENİ: Yavru sayısı düzenleme
+    final calfCtrl = TextEditingController(
+      text: isEditing ? cowToEdit.calfCount.toString() : '0',
+    );
 
     DateTime? selectedDate = isEditing ? cowToEdit.birthDate : null;
-    String selectedCat = isEditing ? cowToEdit.category : 'Süt Veren İnekler';
+    String selectedCat = (isEditing && _categories.contains(cowToEdit.category))
+        ? cowToEdit.category
+        : 'Süt Veren İnekler';
     String? selectedMotherId = isEditing ? cowToEdit.motherId : null;
 
-    // Anne olabilecek yetişkin inekleri filtrele
     List<Cow> potentialMothers = allCows
         .where(
           (c) =>
@@ -194,7 +168,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           _buildPremiumTextField('İsim', Icons.pets, nameCtrl),
                           const SizedBox(height: 15),
 
-                          // Doğum Tarihi Seçici
                           InkWell(
                             onTap: () async {
                               final date = await showDatePicker(
@@ -243,7 +216,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           ),
                           const SizedBox(height: 15),
 
-                          // Kategori Seçici
                           DropdownButtonFormField<String>(
                             value: selectedCat,
                             decoration: _premiumInputDeco(
@@ -269,7 +241,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           ),
                           const SizedBox(height: 15),
 
-                          // YENİ: ANNESİ SEÇİMİ
                           DropdownButtonFormField<String?>(
                             value: selectedMotherId,
                             decoration: _premiumInputDeco(
@@ -302,6 +273,13 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           const SizedBox(height: 15),
 
                           _buildPremiumTextField(
+                            'Yavru Sayısı',
+                            Icons.child_care,
+                            calfCtrl,
+                            isNumber: true,
+                          ),
+                          const SizedBox(height: 15),
+                          _buildPremiumTextField(
                             'Kalıcı Hastalık',
                             Icons.medical_services,
                             diseaseCtrl,
@@ -326,7 +304,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
                     ),
                   ),
 
-                  // Kaydet Butonu
                   SizedBox(
                     width: double.infinity,
                     height: 60,
@@ -352,6 +329,8 @@ class _CowsViewState extends ConsumerState<CowsView> {
                             cowToEdit.birthDate = selectedDate!;
                             cowToEdit.category = selectedCat;
                             cowToEdit.motherId = selectedMotherId;
+                            cowToEdit.calfCount =
+                                int.tryParse(calfCtrl.text) ?? 0;
                             cowToEdit.chronicDisease = diseaseCtrl.text;
                             cowToEdit.medicalHistory = historyCtrl.text;
                             cowToEdit.notes = notesCtrl.text;
@@ -376,6 +355,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
                               birthDate: selectedDate!,
                               category: selectedCat,
                               motherId: selectedMotherId,
+                              calfCount: int.tryParse(calfCtrl.text) ?? 0,
                               chronicDisease: diseaseCtrl.text.isEmpty
                                   ? 'Yok'
                                   : diseaseCtrl.text,
@@ -384,18 +364,16 @@ class _CowsViewState extends ConsumerState<CowsView> {
                                   : historyCtrl.text,
                               notes: notesCtrl.text,
                             );
-
                             final success = await ref
                                 .read(cowProvider.notifier)
                                 .addCow(newCow);
-                            if (success && mounted) {
+                            if (success && mounted)
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Yeni hayvan eklendi!'),
                                   backgroundColor: AppColors.primaryGreen,
                                 ),
                               );
-                            }
                           }
                           if (mounted) {
                             Navigator.pop(context);
@@ -422,13 +400,11 @@ class _CowsViewState extends ConsumerState<CowsView> {
     );
   }
 
-  // --- İNEK DETAYLARI (AKILLI KİMLİK KARTI) ---
   void _showCowDetails(
     Cow cow,
     Map<String, dynamic> settings,
     List<Cow> allCows,
   ) {
-    // Dinamik katsayıları hesapla
     final stats = _calculateDynamicStats(cow, settings);
 
     showModalBottomSheet(
@@ -437,12 +413,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.90,
-        padding: const EdgeInsets.only(
-          top: 24,
-          left: 24,
-          right: 24,
-          bottom: 24,
-        ),
+        padding: const EdgeInsets.all(24),
         decoration: const BoxDecoration(
           color: AppColors.background,
           borderRadius: BorderRadius.only(
@@ -511,29 +482,38 @@ class _CowsViewState extends ConsumerState<CowsView> {
                         cow.category,
                         color: AppColors.primaryGreen,
                       ),
-                      // YENİ: Annesi Gösterimi
                       if (cow.motherName != null && cow.motherName!.isNotEmpty)
                         _buildInfoRow(
                           Icons.family_restroom,
                           'Annesi',
                           cow.motherName!,
                         ),
+                      _buildInfoRow(
+                        Icons.child_care,
+                        'Yavru Sayısı',
+                        '${cow.calfCount} Adet',
+                      ),
                     ]),
                     const SizedBox(height: 15),
 
-                    _buildDetailCard('Üretim ve Sağlık', [
+                    // SADECE SÜT ÜRETİMİ KALDI
+                    _buildDetailCard('Süt Üretimi', [
                       _buildInfoRow(
                         Icons.water_drop,
-                        'Günlük Üretim',
+                        'Günlük Ortalama',
                         '${stats['daily_milk']?.toStringAsFixed(1)} Litre',
-                        color: AppColors.black,
+                        color: AppColors.primaryGreen,
                       ),
                       _buildInfoRow(
                         Icons.functions,
-                        'Tahmini Top. Süt',
+                        'Hayatı Boyunca Toplam',
                         '${stats['total_milk']?.toStringAsFixed(0)} Litre',
                         color: AppColors.black,
                       ),
+                    ]),
+                    const SizedBox(height: 15),
+
+                    _buildDetailCard('Sağlık Bilgileri', [
                       _buildInfoRow(
                         Icons.warning,
                         'Kalıcı Hastalık',
@@ -542,40 +522,12 @@ class _CowsViewState extends ConsumerState<CowsView> {
                             ? AppColors.primaryGreen
                             : AppColors.barnRed,
                       ),
+                      _buildInfoRow(
+                        Icons.history,
+                        'İşlem/Hastalık Geçmişi',
+                        cow.medicalHistory,
+                      ),
                     ]),
-                    const SizedBox(height: 15),
-
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: AppColors.blackGradient,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: AppColors.black, width: 3),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildFinanceItem(
-                              'Tahmini Kazancı',
-                              '+₺${stats['total_income']?.toStringAsFixed(0)}',
-                              AppColors.primaryGreen,
-                            ),
-                          ),
-                          Container(
-                            width: 2,
-                            height: 40,
-                            color: AppColors.white.withOpacity(0.2),
-                          ),
-                          Expanded(
-                            child: _buildFinanceItem(
-                              'Tahmini Maliyeti',
-                              '-₺${stats['total_cost']?.toStringAsFixed(0)}',
-                              AppColors.barnRed,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                     const SizedBox(height: 15),
 
                     if (cow.notes.isNotEmpty)
@@ -588,14 +540,12 @@ class _CowsViewState extends ConsumerState<CowsView> {
                           ),
                         ),
                       ]),
-
                     const SizedBox(height: 20),
                   ],
                 ),
               ),
             ),
 
-            // Öldü ve Kesildi Butonları (Sabit En Alt)
             Row(
               children: [
                 Expanded(
@@ -620,10 +570,72 @@ class _CowsViewState extends ConsumerState<CowsView> {
                         fontSize: 16,
                       ),
                     ),
-                    onPressed: () async {
-                      cow.status = 'Öldü';
-                      await ref.read(cowProvider.notifier).updateCow(cow);
-                      if (mounted) Navigator.pop(context);
+                    onPressed: () {
+                      // YENİ: SİLME ONAYI DİYALOĞU
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text(
+                            '⚠️ Emin misiniz?',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          content: const Text(
+                            'Bu hayvan sistemden tamamen silinecektir. Geri alınamaz.',
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: const BorderSide(
+                              color: AppColors.black,
+                              width: 2,
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text(
+                                'İptal',
+                                style: TextStyle(
+                                  color: AppColors.black,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.barnRed,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              onPressed: () async {
+                                final success = await ref
+                                    .read(cowProvider.notifier)
+                                    .deleteCow(cow.id);
+                                if (mounted) {
+                                  Navigator.pop(ctx); // Dialogu kapat
+                                  Navigator.pop(context); // BottomSheet'i kapat
+                                  if (success)
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Hayvan başarıyla silindi.',
+                                        ),
+                                        backgroundColor: AppColors.primaryGreen,
+                                      ),
+                                    );
+                                }
+                              },
+                              child: const Text(
+                                'Evet, Sil',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
                     },
                   ),
                 ),
@@ -652,7 +664,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
                     ),
                     onPressed: () {
                       Navigator.pop(context);
-                      _showSlaughterDialog(cow); // FİNANSA YANSIYACAK KISIM
+                      _showSlaughterDialog(cow);
                     },
                   ),
                 ),
@@ -664,7 +676,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
     );
   }
 
-  // Kesim Geliri Pop-up'ı (Doğrudan Finance Provider'ı tetikler)
   void _showSlaughterDialog(Cow cow) {
     final incomeCtrl = TextEditingController();
     showDialog(
@@ -711,7 +722,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
             ),
             onPressed: () async {
               if (incomeCtrl.text.isNotEmpty) {
-                // 1. Finansa Ekle (Backend İneği otomatik olarak 'Ayrıldı' yapar)
                 final success = await ref
                     .read(financeProvider.notifier)
                     .slaughterCow(
@@ -719,11 +729,10 @@ class _CowsViewState extends ConsumerState<CowsView> {
                       tagNumber: cow.tagNumber,
                       price: double.tryParse(incomeCtrl.text) ?? 0,
                     );
-
                 if (mounted) {
                   Navigator.pop(context);
                   if (success) {
-                    ref.invalidate(cowProvider); // UI inek listesini yenile
+                    ref.invalidate(cowProvider);
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Hayvan Ayrıldı, gelir Finansa işlendi!'),
@@ -747,7 +756,6 @@ class _CowsViewState extends ConsumerState<CowsView> {
     );
   }
 
-  // --- YARDIMCI UI WIDGETLARI ---
   Widget _buildPremiumTextField(
     String label,
     IconData icon,
@@ -851,36 +859,10 @@ class _CowsViewState extends ConsumerState<CowsView> {
     );
   }
 
-  Widget _buildFinanceItem(String title, String amount, Color color) {
-    return Column(
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: AppColors.white.withOpacity(0.7),
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          amount,
-          style: TextStyle(
-            color: color,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final cowAsyncValue = ref.watch(cowProvider);
-    final settingsAsyncValue = ref.watch(
-      settingsProvider,
-    ); // Ayarları dinliyoruz
-
+    final settingsAsyncValue = ref.watch(settingsProvider);
     Map<String, dynamic> settings = {};
     if (settingsAsyncValue is AsyncData && settingsAsyncValue.value != null) {
       settings = settingsAsyncValue.value!;
@@ -907,51 +889,43 @@ class _CowsViewState extends ConsumerState<CowsView> {
       ),
       body: Column(
         children: [
+          // YENİ: KAMERA BUTONU EKLENDİ
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: InkWell(
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Kamera modülü yakında eklenecek!'),
-                  ),
-                );
-              },
+              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Kamera tarayıcı aktif ediliyor...'),
+                ),
+              ),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 18),
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 decoration: BoxDecoration(
                   gradient: AppColors.greenGradient,
                   borderRadius: BorderRadius.circular(25),
                   border: Border.all(color: AppColors.black, width: 3),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black26,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: AppColors.white.withOpacity(0.2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons.camera_alt_rounded,
+                        Icons.qr_code_scanner_rounded,
                         color: AppColors.white,
-                        size: 28,
+                        size: 26,
                       ),
                     ),
                     const SizedBox(width: 12),
                     const Text(
-                      'Kamerayla Küpe Oku',
+                      'Kamerayla Küpe / Barkod Oku',
                       style: TextStyle(
                         color: AppColors.white,
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         fontFamily: 'Comfortaa',
                       ),

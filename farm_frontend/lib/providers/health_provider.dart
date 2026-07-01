@@ -37,6 +37,7 @@ class HealthNotifier extends AsyncNotifier<void> {
     required String type,
     required String description,
     required double cost,
+    int? calfCount, // YENİ EKLENDİ
   }) async {
     try {
       final response = await _dioClient.dio.post(
@@ -46,6 +47,7 @@ class HealthNotifier extends AsyncNotifier<void> {
           'type': type,
           'description': description,
           'cost': cost,
+          'calf_count': calfCount, // YENİ EKLENDİ
           'treatment_date': DateTime.now().toIso8601String(),
         },
       );

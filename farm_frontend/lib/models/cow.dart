@@ -4,8 +4,9 @@ class Cow {
   String tagNumber;
   DateTime birthDate;
   String category;
-  String? motherId; // <-- YENİ EKLENDİ
-  String? motherName; // <-- YENİ EKLENDİ (UI'da göstermek için)
+  String? motherId;
+  String? motherName;
+  DateTime? pregnancyStartDate;
   String chronicDisease;
   int calfCount;
   String medicalHistory;
@@ -23,6 +24,7 @@ class Cow {
     required this.category,
     this.motherId,
     this.motherName,
+    this.pregnancyStartDate,
     this.chronicDisease = 'Yok',
     this.calfCount = 0,
     this.medicalHistory = 'Temiz',
@@ -37,23 +39,14 @@ class Cow {
     final now = DateTime.now();
     int years = now.year - birthDate.year;
     int months = now.month - birthDate.month;
-    int days = now.day - birthDate.day;
-
-    if (days < 0) {
-      months--;
-      days += 30;
-    }
     if (months < 0) {
       years--;
       months += 12;
     }
-    return '$years Yıl, $months Ay, $days Gün';
+    return '$years Yıl, $months Ay';
   }
 
-  // Yaşını gün olarak veren yardımcı fonksiyon (Hesaplamalar için lazım)
-  int get ageInDays {
-    return DateTime.now().difference(birthDate).inDays;
-  }
+  int get ageInDays => DateTime.now().difference(birthDate).inDays;
 
   factory Cow.fromJson(Map<String, dynamic> json) {
     return Cow(
@@ -64,24 +57,22 @@ class Cow {
           ? DateTime.parse(json['birth_date'])
           : DateTime.now(),
       category: json['category'] ?? 'Diğer',
-      motherId: json['mother_id']?.toString(), // <-- YENİ EKLENDİ
-      motherName:
-          json['mother']?['name'] ??
-          json['mother']?['tag_number'], // İlişkiyle gelirse
+      motherId: json['mother_id']?.toString(),
+      motherName: json['mother']?['name'] ?? json['mother']?['tag_number'],
+      pregnancyStartDate: json['pregnancy_start_date'] != null
+          ? DateTime.parse(json['pregnancy_start_date'])
+          : null,
       chronicDisease: json['chronic_disease'] ?? 'Yok',
       calfCount: json['calf_count'] != null
           ? int.parse(json['calf_count'].toString())
           : 0,
       medicalHistory: json['medical_history'] ?? 'Temiz',
-      totalMilkProduced: json['total_milk_produced'] != null
-          ? double.parse(json['total_milk_produced'].toString())
-          : 0.0,
-      totalIncome: json['total_income'] != null
-          ? double.parse(json['total_income'].toString())
-          : 0.0,
-      totalCost: json['total_cost'] != null
-          ? double.parse(json['total_cost'].toString())
-          : 0.0,
+      totalMilkProduced:
+          double.tryParse(json['total_milk_produced']?.toString() ?? '0') ??
+          0.0,
+      totalIncome:
+          double.tryParse(json['total_income']?.toString() ?? '0') ?? 0.0,
+      totalCost: double.tryParse(json['total_cost']?.toString() ?? '0') ?? 0.0,
       notes: json['notes'] ?? '',
       status: json['status'] ?? 'Aktif',
     );
@@ -89,13 +80,15 @@ class Cow {
 
   Map<String, dynamic> toJson() {
     return {
-      'name': name,
-      'tag_number': tagNumber,
-      'birth_date': birthDate.toIso8601String(),
-      'category': category,
-      'mother_id': motherId, // <-- YENİ EKLENDİ
-      'chronic_disease': chronicDisease,
-      'calf_count': calfCount,
+      'name': name, 'tag_number': tagNumber,
+      // Laravel'in sevdiği tarih formatı (Y-m-d)
+      'birth_date':
+          "${birthDate.year}-${birthDate.month.toString().padLeft(2, '0')}-${birthDate.day.toString().padLeft(2, '0')}",
+      'category': category, 'mother_id': motherId,
+      'pregnancy_start_date': pregnancyStartDate != null
+          ? "${pregnancyStartDate!.year}-${pregnancyStartDate!.month.toString().padLeft(2, '0')}-${pregnancyStartDate!.day.toString().padLeft(2, '0')}"
+          : null,
+      'chronic_disease': chronicDisease, 'calf_count': calfCount,
       'medical_history': medicalHistory,
       'total_milk_produced': totalMilkProduced,
       'total_income': totalIncome,

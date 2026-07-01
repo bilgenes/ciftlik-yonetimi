@@ -30,10 +30,7 @@ class CowNotifier extends AsyncNotifier<List<Cow>> {
   // Yeni İnek Ekleme (POST)
   Future<bool> addCow(Cow newCow) async {
     try {
-      final response = await _dioClient.dio.post(
-        'cows',
-        data: newCow.toJson(),
-      );
+      final response = await _dioClient.dio.post('cows', data: newCow.toJson());
 
       if (response.statusCode == 201) {
         // Eklenen yeni ineği backend'den gelen ID ile beraber modele çevir
@@ -47,7 +44,9 @@ class CowNotifier extends AsyncNotifier<List<Cow>> {
     } catch (e) {
       print('Ekleme Hatası: $e');
       if (e is DioException) {
-        print('Hata Detayı: ${e.response?.data}'); // Laravel Validation hatalarını görmek için
+        print(
+          'Hata Detayı: ${e.response?.data}',
+        ); // Laravel Validation hatalarını görmek için
       }
       return false;
     }
@@ -65,13 +64,30 @@ class CowNotifier extends AsyncNotifier<List<Cow>> {
         // UI Listesinde o ineği bul ve değiştir
         state = AsyncData([
           for (final cow in state.value ?? [])
-            if (cow.id == updatedCow.id) updatedCow else cow
+            if (cow.id == updatedCow.id) updatedCow else cow,
         ]);
         return true;
       }
       return false;
     } catch (e) {
       print('Güncelleme Hatası: $e');
+      return false;
+    }
+  }
+
+  // İneği Tamamen Silme (DELETE)
+  Future<bool> deleteCow(String cowId) async {
+    try {
+      final response = await _dioClient.dio.delete('cows/$cowId');
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        state = AsyncData(
+          (state.value ?? []).where((c) => c.id != cowId).toList(),
+        );
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print('Silme Hatası: $e');
       return false;
     }
   }

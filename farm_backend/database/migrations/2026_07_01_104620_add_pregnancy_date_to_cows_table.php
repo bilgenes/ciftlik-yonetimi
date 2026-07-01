@@ -6,21 +6,23 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Run the migrations.
+     */
     public function up(): void
     {
         Schema::table('cows', function (Blueprint $table) {
-            // Eğer mother_id sütunu yoksa ekle (Varsa hata verme, es geç)
-            if (!Schema::hasColumn('cows', 'mother_id')) {
-                $table->foreignId('mother_id')->nullable()->constrained('cows')->onDelete('set null')->after('category');
-            }
+            $table->date('pregnancy_start_date')->nullable()->after('mother_id');
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::table('cows', function (Blueprint $table) {
-            $table->dropForeign(['mother_id']);
-            $table->dropColumn('mother_id');
+            //
         });
     }
 };

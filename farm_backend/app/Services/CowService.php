@@ -21,10 +21,17 @@ class CowService implements CowServiceInterface
      */
     public function createCow(array $data): Cow
     {
-        // Burada ileride ekleyeceğin "otomatik laktasyon başlatma" 
-        // veya "maliyet hesaplama" gibi iş kuralları (Business Logic) yer alacak.
-        
-        return Cow::create($data);
+        $cow = Cow::create($data);
+
+        // Eğer yeni ineğin bir annesi belirtildiyse annenin yavru sayısını artır
+        if (!empty($data['mother_id'])) {
+            $mother = Cow::find($data['mother_id']);
+            if ($mother) {
+                $mother->increment('calf_count');
+            }
+        }
+
+        return $cow;
     }
 
     /**

@@ -26,15 +26,18 @@ class HealthRecordService implements HealthRecordServiceInterface
         $record = HealthRecord::create($data);
 
         if ($record->cost > 0) {
+            // İneği bulup adını/küpesini alıyoruz
+            $cow = \App\Models\Cow::find($record->cow_id);
+            $cowName = $cow ? ($cow->tag_number . ' - ' . $cow->name) : ('ID: ' . $record->cow_id);
+
             $this->financeService->addTransaction([
                 'transaction_type' => 'gider',
-                'category' => 'veteriner',
+                'category' => 'Veteriner / Sağlık',
                 'amount' => $record->cost,
-                'description' => "İnek ID: {$record->cow_id} - {$record->type} işlemi",
+                'description' => "{$cowName} | {$record->type} işlemi",
                 'transaction_date' => $record->treatment_date
             ]);
         }
-
         return $record;
     }
 }

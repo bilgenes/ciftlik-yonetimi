@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../core/app_colors.dart';
 import '../core/ui_helper.dart';
 import '../providers/health_provider.dart';
 import '../providers/cow_provider.dart';
-import '../models/cow.dart'; // Gerçek inek modelimiz için eklendi
+import '../providers/finance_provider.dart'; // YENİ: Finansa yansıtmak için
+import '../models/cow.dart';
 
-// --- GELİŞMİŞ SAĞLIK VERİ MODELLERİ ---
 class TreatmentRecord {
   String name;
   DateTime date;
@@ -22,13 +21,10 @@ class HealthCow {
   String name;
   String mainCategory;
   String healthStatus;
-
   String? diseaseName;
   DateTime? sickSince;
-
   DateTime? pregnancyStartDate;
   String? motherTag;
-
   List<TreatmentRecord> treatments;
 
   HealthCow({
@@ -47,24 +43,18 @@ class HealthCow {
   String getDurationString(DateTime? start) {
     if (start == null) return 'Bilinmiyor';
     final now = DateTime.now();
-    int months = now.month - start.month + (12 * (now.year - start.year));
-    int days = now.day - start.day;
-    if (days < 0) {
-      months--;
-      days += 30;
-    }
+    int days = now.difference(start).inDays;
+    int months = days ~/ 30;
+    days = days % 30;
     return '$months Ay, $days Gün';
   }
 
-  double get totalTreatmentCost {
-    return treatments.fold(0, (sum, item) => sum + item.cost);
-  }
+  double get totalTreatmentCost =>
+      treatments.fold(0, (sum, item) => sum + item.cost);
 }
 
-// 1. ConsumerStatefulWidget Olarak Değiştirildi
 class HealthView extends ConsumerStatefulWidget {
   const HealthView({super.key});
-
   @override
   ConsumerState<HealthView> createState() => _HealthViewState();
 }
@@ -140,7 +130,6 @@ class _HealthViewState extends ConsumerState<HealthView> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
                   TextField(
                     controller: diseaseCtrl,
                     decoration: _premiumInputDeco(
@@ -148,46 +137,7 @@ class _HealthViewState extends ConsumerState<HealthView> {
                       Icons.healing_rounded,
                     ),
                   ),
-                  const SizedBox(height: 15),
-
-                  InkWell(
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (date != null) setFormState(() => selectedDate = date);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: AppColors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppColors.black, width: 2.5),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.calendar_today,
-                            color: AppColors.black,
-                          ),
-                          const SizedBox(width: 15),
-                          Text(
-                            'Başlangıç: ${DateFormat('dd/MM/yyyy').format(selectedDate)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.black,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                   const SizedBox(height: 30),
-
                   SizedBox(
                     width: double.infinity,
                     height: 60,
@@ -202,21 +152,21 @@ class _HealthViewState extends ConsumerState<HealthView> {
                           ),
                         ),
                       ),
-                      // Backend'e Gerçek Hastalık Kaydetme İşlemi
                       onPressed: () async {
                         if (diseaseCtrl.text.isNotEmpty) {
-                          // Orijinal ineği bul ve güncelle
                           final liveCows = ref.read(cowProvider).value ?? [];
                           try {
                             final originalCow = liveCows.firstWhere(
                               (c) => c.id == animal.id,
                             );
                             originalCow.chronicDisease = diseaseCtrl.text;
+                            // YENİ: Ayrıca işlem geçmişine de metin olarak yazsın
+                            originalCow.medicalHistory =
+                                '${originalCow.medicalHistory} \n- ${diseaseCtrl.text} teşhisi (${DateFormat('dd/MM/yyyy').format(selectedDate)})';
                             await ref
                                 .read(cowProvider.notifier)
                                 .updateCow(originalCow);
                           } catch (e) {}
-
                           if (parentModalState != null) parentModalState(() {});
                           if (mounted) Navigator.pop(context);
                         }
@@ -240,7 +190,7 @@ class _HealthViewState extends ConsumerState<HealthView> {
     );
   }
 
-  // --- TEDAVİ FORMU ---
+  // --- TEDAVİ FORMU (Finans Entegrasyonlu) ---
   void _showTreatmentForm(HealthCow animal, StateSetter setModalState) {
     final nameCtrl = TextEditingController();
     final costCtrl = TextEditingController();
@@ -321,16 +271,16 @@ class _HealthViewState extends ConsumerState<HealthView> {
                       side: const BorderSide(color: AppColors.black, width: 3),
                     ),
                   ),
-                  // Tedaviyi HealthProvider Üzerinden API'ye Yollama
                   onPressed: () async {
                     if (nameCtrl.text.isNotEmpty && costCtrl.text.isNotEmpty) {
+                      final cost = double.tryParse(costCtrl.text) ?? 0.0;
                       final success = await ref
                           .read(healthProvider.notifier)
                           .addTreatment(
                             cowId: animal.id,
                             type: 'Tedavi/Aşı',
                             description: nameCtrl.text,
-                            cost: double.tryParse(costCtrl.text) ?? 0.0,
+                            cost: cost,
                           );
 
                       if (success && mounted) {
@@ -339,15 +289,32 @@ class _HealthViewState extends ConsumerState<HealthView> {
                             TreatmentRecord(
                               name: nameCtrl.text,
                               date: DateTime.now(),
-                              cost: double.tryParse(costCtrl.text) ?? 0.0,
+                              cost: cost,
                             ),
                           );
                         });
+
+                        // YENİ: İnek kimliğindeki işlem geçmişini (medicalHistory) güncelle
+                        try {
+                          final liveCows = ref.read(cowProvider).value ?? [];
+                          final originalCow = liveCows.firstWhere(
+                            (c) => c.id == animal.id,
+                          );
+                          originalCow.medicalHistory =
+                              '${originalCow.medicalHistory} \n- ${nameCtrl.text} uygulandı (Maliyet: ₺$cost)';
+                          ref.read(cowProvider.notifier).updateCow(originalCow);
+                        } catch (e) {}
+
+                        // YENİ: Finans provider'ı anında yenile
+                        ref.invalidate(financeProvider);
+
                         setModalState(() {});
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Tedavi başarıyla kaydedildi.'),
+                            content: Text(
+                              'Tedavi kaydedildi, Finansa yansıdı.',
+                            ),
                             backgroundColor: AppColors.primaryGreen,
                           ),
                         );
@@ -452,27 +419,25 @@ class _HealthViewState extends ConsumerState<HealthView> {
                   ),
                   onPressed: () async {
                     int count = int.tryParse(countCtrl.text) ?? 1;
-                    for (int i = 1; i <= count; i++) {
-                      // Backend'e Yeni İnek (Buzağı) Ekleme İsteği
-                      final newCalf = Cow(
-                        id: '',
-                        tagNumber:
-                            'TR-YENI-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}$i',
-                        name: '${animal.name} Yavrusu $i',
-                        birthDate: DateTime.now(),
-                        category: 'Buzağılar',
-                        chronicDisease: 'Yok',
-                        medicalHistory: 'Temiz',
-                        notes: 'Anne: ${animal.tagNumber}',
-                      );
-                      await ref.read(cowProvider.notifier).addCow(newCalf);
-                    }
-                    if (mounted) {
+
+                    // Backend'e Doğum İsteği Gönderimi (Otomasyon orada çalışacak)
+                    final success = await ref
+                        .read(healthProvider.notifier)
+                        .addTreatment(
+                          cowId: animal.id,
+                          type: 'Doğum',
+                          description: '$count adet yavru doğdu.',
+                          cost: 0.0,
+                          calfCount: count,
+                        );
+
+                    if (mounted && success) {
+                      ref.invalidate(cowProvider);
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text(
-                            '🍼 Buzağılar başarıyla kreşe eklendi!',
+                            '🍼 Doğum başarılı, buzağılar kreşe eklendi!',
                           ),
                           backgroundColor: AppColors.primaryGreen,
                         ),
@@ -496,9 +461,7 @@ class _HealthViewState extends ConsumerState<HealthView> {
     );
   }
 
-  // --- DETAY KİMLİK KARTLARI (TEDAVİLERİ ÇEKME EKLENDİ) ---
   void _showAnimalHealthDetails(HealthCow animal) async {
-    // 1. Açılmadan önce tedavi listesini API'den çek
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -506,18 +469,14 @@ class _HealthViewState extends ConsumerState<HealthView> {
         child: CircularProgressIndicator(color: AppColors.primaryGreen),
       ),
     );
-
     final fetchedTreatments = await ref
         .read(healthProvider.notifier)
         .getTreatments(animal.id);
 
     if (mounted) {
-      Navigator.pop(context); // Yükleme popup'ını kapat
+      Navigator.pop(context);
       setState(() => animal.treatments = fetchedTreatments);
     }
-
-    String motherName =
-        'Bilinmiyor'; // API'den istersen sonradan detaylandırabilirsin
 
     if (!mounted) return;
     UiHelper.showPremiumBottomSheet(
@@ -607,10 +566,54 @@ class _HealthViewState extends ConsumerState<HealthView> {
                             'Gebelik ve Takip Kartı',
                             AppColors.greenGradient,
                             [
-                              _buildDetailRow(
-                                Icons.hourglass_empty,
-                                'Durum',
-                                'Süresi dolduğunda Doğum yap butonunu kullanın.',
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: const Icon(
+                                  Icons.date_range,
+                                  color: Colors.white,
+                                ),
+                                title: const Text(
+                                  'Başlangıç Tarihi',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                                subtitle: Text(
+                                  animal.pregnancyStartDate != null
+                                      ? DateFormat(
+                                          'dd MMMM yyyy',
+                                          'tr_TR',
+                                        ).format(animal.pregnancyStartDate!)
+                                      : 'Bilinmiyor',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                trailing: const Icon(
+                                  Icons.edit,
+                                  color: Colors.white,
+                                ),
+                                onTap: () async {
+                                  final date = await showDatePicker(
+                                    context: context,
+                                    initialDate:
+                                        animal.pregnancyStartDate ??
+                                        DateTime.now(),
+                                    firstDate: DateTime(2020),
+                                    lastDate: DateTime.now(),
+                                  );
+                                  if (date != null) {
+                                    final liveCows =
+                                        ref.read(cowProvider).value ?? [];
+                                    final originalCow = liveCows.firstWhere(
+                                      (c) => c.id == animal.id,
+                                    );
+                                    originalCow.pregnancyStartDate = date;
+                                    await ref
+                                        .read(cowProvider.notifier)
+                                        .updateCow(originalCow);
+                                    setModalState(() {});
+                                  }
+                                },
                               ),
                             ],
                           ),
@@ -621,9 +624,9 @@ class _HealthViewState extends ConsumerState<HealthView> {
                             AppColors.blackGradient,
                             [
                               _buildDetailRow(
-                                Icons.female,
+                                Icons.family_restroom,
                                 'Anne Bilgisi',
-                                '${animal.motherTag ?? 'Bilinmiyor'} - $motherName',
+                                animal.motherTag ?? 'Bilinmiyor',
                               ),
                             ],
                           ),
@@ -754,6 +757,35 @@ class _HealthViewState extends ConsumerState<HealthView> {
                 // --- ALT AKSİYON BUTONLARI ---
                 Column(
                   children: [
+                    // YENİ EKLENEN "HAMİLE KALDI" BUTONU
+                    if (animal.healthStatus == 'Sağlıklı' &&
+                        (animal.mainCategory == 'Süt Veren İnekler' ||
+                            animal.mainCategory == 'Düveler'))
+                      SizedBox(
+                        width: double.infinity,
+                        child: _buildActionButton(
+                          Icons.favorite_rounded,
+                          'Hamile Kaldı (Gebelik Başlat)',
+                          AppColors.secondaryPink,
+                          AppColors.white,
+                          () async {
+                            final liveCows = ref.read(cowProvider).value ?? [];
+                            try {
+                              final originalCow = liveCows.firstWhere(
+                                (c) => c.id == animal.id,
+                              );
+                              originalCow.category = 'Hamile İnekler';
+                              originalCow.pregnancyStartDate = DateTime.now();
+                              await ref
+                                  .read(cowProvider.notifier)
+                                  .updateCow(originalCow);
+                            } catch (e) {}
+                            if (mounted) Navigator.pop(context);
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+
                     if (animal.healthStatus == 'Sağlıklı')
                       SizedBox(
                         width: double.infinity,
@@ -765,6 +797,7 @@ class _HealthViewState extends ConsumerState<HealthView> {
                           () => _showDiseaseForm(animal, setModalState),
                         ),
                       ),
+
                     if (animal.healthStatus == 'Hasta')
                       SizedBox(
                         width: double.infinity,
@@ -788,6 +821,7 @@ class _HealthViewState extends ConsumerState<HealthView> {
                           },
                         ),
                       ),
+
                     if (animal.healthStatus == 'Hamile')
                       SizedBox(
                         width: double.infinity,
@@ -1030,7 +1064,6 @@ class _HealthViewState extends ConsumerState<HealthView> {
     );
   }
 
-  // YENİ: BÜTÜN SAYFAYI RIVERPOD İLE SARIYORUZ
   @override
   Widget build(BuildContext context) {
     final cowAsync = ref.watch(cowProvider);
@@ -1043,8 +1076,9 @@ class _HealthViewState extends ConsumerState<HealthView> {
         ),
         error: (err, stack) => Center(child: Text('Bir hata oluştu: $err')),
         data: (liveCows) {
-          // 1. Canlı verileri arayüzün anladığı HealthCow formatına çevir
-          final mappedAnimals = liveCows.map((c) {
+          final mappedAnimals = liveCows.where((c) => c.status == 'Aktif').map((
+            c,
+          ) {
             String status = 'Sağlıklı';
             if (c.category == 'Hamile İnekler')
               status = 'Hamile';
@@ -1058,11 +1092,12 @@ class _HealthViewState extends ConsumerState<HealthView> {
               mainCategory: c.category,
               healthStatus: status,
               diseaseName: status == 'Hasta' ? c.chronicDisease : null,
+              pregnancyStartDate: c.pregnancyStartDate,
+              motherTag: c.motherName,
               treatments: [],
             );
           }).toList();
 
-          // 2. Filtreleme ve Arama işlemleri
           final finalAnimals = mappedAnimals.where((animal) {
             final matchesSearch =
                 animal.tagNumber.toLowerCase().contains(
@@ -1070,7 +1105,6 @@ class _HealthViewState extends ConsumerState<HealthView> {
                 ) ||
                 animal.name.toLowerCase().contains(_searchQuery.toLowerCase());
             if (!matchesSearch) return false;
-
             if (_selectedCategory == 'Tümü') return true;
             if (_selectedCategory == 'Hasta Olan Hayvanlar')
               return animal.healthStatus == 'Hasta';
@@ -1088,55 +1122,9 @@ class _HealthViewState extends ConsumerState<HealthView> {
           return Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: InkWell(
-                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Kamera tarayıcı aktif ediliyor...'),
-                    ),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      gradient: AppColors.greenGradient,
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: AppColors.black, width: 3),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: AppColors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.qr_code_scanner_rounded,
-                            color: AppColors.white,
-                            size: 26,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'Kamerayla Küpe / Barkod Oku',
-                          style: TextStyle(
-                            color: AppColors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Comfortaa',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 4,
+                  vertical: 12,
                 ),
                 child: SizedBox(
                   height: 55,

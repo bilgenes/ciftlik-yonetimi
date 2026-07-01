@@ -11,16 +11,12 @@ class SettingsView extends ConsumerStatefulWidget {
 }
 
 class _SettingsViewState extends ConsumerState<SettingsView> {
-  // Profil Ayarları
-  final _nameCtrl = TextEditingController(text: 'Enes');
-
-  // Piyasa Birim Fiyatları
+  final _nameCtrl = TextEditingController();
   final _milkPriceCtrl = TextEditingController(text: '15.50');
   final _feedPriceCtrl = TextEditingController(text: '12.00');
   final _strawPriceCtrl = TextEditingController(text: '50.00');
   final _silagePriceCtrl = TextEditingController(text: '4.50');
 
-  // Kategoriler
   final List<String> _categories = [
     'Süt Veren İnekler',
     'Düveler',
@@ -29,45 +25,21 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     'Buzağılar',
   ];
   String _selectedCategory = 'Süt Veren İnekler';
-
-  // Katsayıları tutan harita
   final Map<String, Map<String, TextEditingController>> _categoryCoefficients =
       {};
-
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    // Varsayılan katsayıları başlatıyoruz
+    // Sadece süt üretimi bırakıldı
     for (var cat in _categories) {
       _categoryCoefficients[cat] = {
         'prodMilk': TextEditingController(
           text: cat == 'Süt Veren İnekler' ? '25' : '0',
         ),
-        'consMilk': TextEditingController(text: cat == 'Buzağılar' ? '6' : '0'),
-        'feed': TextEditingController(
-          text: cat == 'Süt Veren İnekler'
-              ? '8'
-              : (cat == 'Buzağılar' ? '1' : '5'),
-        ),
-        'straw': TextEditingController(text: cat == 'Buzağılar' ? '0' : '1'),
-        'silage': TextEditingController(text: cat == 'Buzağılar' ? '0' : '15'),
       };
     }
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _milkPriceCtrl.dispose();
-    _feedPriceCtrl.dispose();
-    _strawPriceCtrl.dispose();
-    _silagePriceCtrl.dispose();
-    for (var cat in _categories) {
-      _categoryCoefficients[cat]?.forEach((key, ctrl) => ctrl.dispose());
-    }
-    super.dispose();
   }
 
   InputDecoration _premiumInputDeco(
@@ -101,11 +73,8 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     );
   }
 
-  // Ayarları Paketleyip Provider'a Gönderme İşlemi
   Future<void> _saveSettings() async {
     setState(() => _isSaving = true);
-
-    // Tüm verileri düz bir JSON objesi (Map) haline getiriyoruz (Örn: 'milk_price': 15.5)
     Map<String, dynamic> dataToSave = {
       'profile_name': _nameCtrl.text,
       'milk_price': _milkPriceCtrl.text,
@@ -113,52 +82,38 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
       'straw_price': _strawPriceCtrl.text,
       'silage_price': _silagePriceCtrl.text,
     };
-
-    // Kategorilerin katsayılarını düzleştirip ekliyoruz (Örn: sut_veren_inekler_feed)
     for (var cat in _categories) {
       String prefix = cat
           .replaceAll(' ', '_')
-          .toLowerCase(); // Örn: süt veren inekler -> sut_veren_inekler
+          .toLowerCase()
+          .replaceAll('ı', 'i')
+          .replaceAll('ğ', 'g')
+          .replaceAll('ü', 'u')
+          .replaceAll('ş', 's')
+          .replaceAll('ö', 'o')
+          .replaceAll('ç', 'c');
       final ctrls = _categoryCoefficients[cat]!;
-
       dataToSave['${prefix}_prodMilk'] = ctrls['prodMilk']!.text;
-      dataToSave['${prefix}_consMilk'] = ctrls['consMilk']!.text;
-      dataToSave['${prefix}_feed'] = ctrls['feed']!.text;
-      dataToSave['${prefix}_straw'] = ctrls['straw']!.text;
-      dataToSave['${prefix}_silage'] = ctrls['silage']!.text;
     }
 
     final success = await ref
         .read(settingsProvider.notifier)
         .saveSettings(dataToSave);
-
     if (mounted) {
       setState(() => _isSaving = false);
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              '🎉 Tüm katsayılar ve çiftlik rasyon motoru başarıyla güncellendi!',
-            ),
-            backgroundColor: AppColors.primaryGreen,
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success ? '🎉 Ayarlar başarıyla güncellendi!' : 'Kayıt başarısız!',
           ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Kayıt başarısız oldu. Sunucu bağlantınızı kontrol edin.',
-            ),
-            backgroundColor: AppColors.barnRed,
-          ),
-        );
-      }
+          backgroundColor: success ? AppColors.primaryGreen : AppColors.barnRed,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Backend'den veri geldiğinde controller'ları DOLDURMA İŞLEMİ
     ref.listen<AsyncValue<Map<String, dynamic>>>(settingsProvider, (
       previous,
       next,
@@ -167,7 +122,6 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           next.value != null &&
           next.value!.isNotEmpty) {
         final data = next.value!;
-
         _nameCtrl.text = data['profile_name']?.toString() ?? _nameCtrl.text;
         _milkPriceCtrl.text =
             data['milk_price']?.toString() ?? _milkPriceCtrl.text;
@@ -179,19 +133,18 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
             data['silage_price']?.toString() ?? _silagePriceCtrl.text;
 
         for (var cat in _categories) {
-          String prefix = cat.replaceAll(' ', '_').toLowerCase();
+          String prefix = cat
+              .replaceAll(' ', '_')
+              .toLowerCase()
+              .replaceAll('ı', 'i')
+              .replaceAll('ğ', 'g')
+              .replaceAll('ü', 'u')
+              .replaceAll('ş', 's')
+              .replaceAll('ö', 'o')
+              .replaceAll('ç', 'c');
           final ctrls = _categoryCoefficients[cat]!;
-
           ctrls['prodMilk']!.text =
               data['${prefix}_prodMilk']?.toString() ?? ctrls['prodMilk']!.text;
-          ctrls['consMilk']!.text =
-              data['${prefix}_consMilk']?.toString() ?? ctrls['consMilk']!.text;
-          ctrls['feed']!.text =
-              data['${prefix}_feed']?.toString() ?? ctrls['feed']!.text;
-          ctrls['straw']!.text =
-              data['${prefix}_straw']?.toString() ?? ctrls['straw']!.text;
-          ctrls['silage']!.text =
-              data['${prefix}_silage']?.toString() ?? ctrls['silage']!.text;
         }
       }
     });
@@ -215,7 +168,6 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               bottom: 30 + MediaQuery.of(context).padding.bottom,
             ),
             children: [
-              // 1. BÖLÜM: PROFİL / İSİM AYARI
               const Text(
                 'Hesap Ayarları',
                 style: TextStyle(
@@ -232,13 +184,6 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   color: AppColors.white,
                   borderRadius: BorderRadius.circular(25),
                   border: Border.all(color: AppColors.black, width: 2.5),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: TextField(
                   controller: _nameCtrl,
@@ -248,10 +193,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 30),
-
-              // 2. BÖLÜM: BİRİM FİYAT MOTORU
               Row(
                 children: [
                   Container(
@@ -341,10 +283,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 35),
-
-              // 3. BÖLÜM: SEKME SEKME KATEGORİ AYARLARI
               const Text(
                 'Kategori Oranları',
                 style: TextStyle(
@@ -355,14 +294,13 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 ),
               ),
               Text(
-                'Seçtiğiniz kategorideki tek bir hayvanın günlük rasyon ve üretim katsayıları.',
+                'Seçilen kategorideki bir hayvanın "Günlük" ortalama süt üretimi.',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.black.withOpacity(0.6),
                 ),
               ),
               const SizedBox(height: 15),
-
               SizedBox(
                 height: 50,
                 child: ListView.builder(
@@ -400,20 +338,12 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 ),
               ),
               const SizedBox(height: 15),
-
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: AppColors.white,
                   borderRadius: BorderRadius.circular(30),
                   border: Border.all(color: AppColors.black, width: 3),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    ),
-                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,79 +361,19 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                       thickness: 2,
                       height: 25,
                     ),
-
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: currentCtrls['prodMilk'],
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Günlük Üret. Süt',
-                              Icons.add_chart_rounded,
-                              suffix: 'L',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: currentCtrls['consMilk'],
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Günlük Tük. Süt',
-                              Icons.play_for_work_rounded,
-                              suffix: 'L',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 15),
                     TextField(
-                      controller: currentCtrls['feed'],
+                      controller: currentCtrls['prodMilk'],
                       keyboardType: TextInputType.number,
                       decoration: _premiumInputDeco(
-                        'Günlük Hazır Yem Tüketimi',
-                        Icons.inventory_2_rounded,
-                        suffix: 'Kg',
+                        'Günlük Süt Üretimi',
+                        Icons.water_drop_rounded,
+                        suffix: 'Litre/Gün',
                       ),
-                    ),
-                    const SizedBox(height: 15),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: currentCtrls['straw'],
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Saman Tüketimi',
-                              Icons.grass_rounded,
-                              suffix: 'Balya',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: currentCtrls['silage'],
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Silaj Tüketimi',
-                              Icons.eco_rounded,
-                              suffix: 'Kg',
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 40),
-
-              // 4. BÖLÜM: AYARLARI GÜNCELLE BUTONU
               SizedBox(
                 width: double.infinity,
                 height: 65,
@@ -517,7 +387,6 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                         width: 3,
                       ),
                     ),
-                    elevation: 6,
                   ),
                   onPressed: _isSaving ? null : _saveSettings,
                   child: _isSaving
@@ -540,7 +409,6 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                                 fontFamily: 'Comfortaa',
-                                letterSpacing: 1.1,
                               ),
                             ),
                           ],

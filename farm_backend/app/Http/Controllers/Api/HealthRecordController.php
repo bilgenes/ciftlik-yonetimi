@@ -31,35 +31,39 @@ class HealthRecordController extends Controller
             'description' => 'required|string',
             'cost' => 'required|numeric|min:0',
             'treatment_date' => 'required|date',
+            'calf_count' => 'nullable|integer|min:1' // YENİ: Yavru sayısı
         ]);
 
         $record = $this->healthService->addRecord($data);
 
-        // --- YENİ EKLENEN DOĞUM OTOMASYONU ---
         $isBirth = str_contains(strtolower($data['type']), 'doğum') || str_contains(strtolower($data['type']), 'dogum');
 
         if ($isBirth) {
             $motherCow = Cow::find($data['cow_id']);
+            $calfCount = $request->calf_count ?? 1;
 
-            // Anne artık Süt Veren İnek kategorisine geçti
+            // Anne artık Süt Veren İnek oldu ve hamileliği bitti
             $motherCow->update([
                 'category' => 'Süt Veren İnekler',
-                'calf_count' => $motherCow->calf_count + 1
+                'calf_count' => $motherCow->calf_count + $calfCount,
+                'pregnancy_start_date' => null
             ]);
 
-            // Yeni bir buzağı profili oluşturuluyor
-            Cow::create([
-                'tag_number' => 'YENİ-' . rand(1000, 9999), // Geçici küpe, çiftçi sonra düzenler
-                'name' => 'İsimsiz Buzağı',
-                'birth_date' => $data['treatment_date'],
-                'category' => 'Buzağılar',
-                'mother_id' => $motherCow->id,
-                'status' => 'Aktif'
-            ]);
+            // Girilen sayı kadar buzağı oluştur
+            for ($i = 1; $i <= $calfCount; $i++) {
+                Cow::create([
+                    'tag_number' => 'TR-' . rand(10000, 99999),
+                    'name' => $motherCow->name . ' Yavrusu ' . $i,
+                    'birth_date' => $data['treatment_date'],
+                    'category' => 'Buzağılar',
+                    'mother_id' => $motherCow->id,
+                    'status' => 'Aktif'
+                ]);
+            }
         }
 
         return response()->json([
-            'message' => $isBirth ? 'Sağlık kaydı eklendi, inek statüsü güncellendi ve buzağı doğdu!' : 'Sağlık kaydı başarıyla eklendi.',
+            'message' => $isBirth ? "Doğum başarılı, $calfCount adet buzağı eklendi!" : 'Kayıt başarıyla eklendi.',
             'record' => $record
         ], 201);
     }
