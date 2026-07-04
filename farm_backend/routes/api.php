@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\StockController;
 use App\Http\Controllers\Api\AgendaController;
 use App\Http\Controllers\Api\AnalysisController;
 use App\Http\Controllers\Api\SettingController;
+use App\Http\Controllers\Api\SystemController;
 
 // --------------------------------------------------------
 // DIŞARIYA AÇIK ROTALAR (Token Gerektirmeyenler)
@@ -62,6 +63,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::put('notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::post('user/fcm-token', [NotificationController::class, 'updateFcmToken']);
+
+    Route::get('system/daily-check', [SystemController::class, 'checkDailyMilk']);
 
     // Analiz Verileri
     Route::get('analysis', [AnalysisController::class, 'index']);

@@ -35,7 +35,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
         .toList();
   }
 
-  // Sadece Süt Üretimini Hesaplar
+  // Sadece Süt Üretimini Hesaplar (Maliyet/Gelir kaldırıldı)
   Map<String, double> _calculateDynamicStats(
     Cow cow,
     Map<String, dynamic> settings,
@@ -57,7 +57,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
 
     return {
       'daily_milk': prodMilk,
-      'total_milk': prodMilk * days, // Hayatı boyunca ürettiği ortalama
+      'total_milk': prodMilk * days, // Hayatı boyunca ürettiği ortalama süt
     };
   }
 
@@ -80,7 +80,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
     final notesCtrl = TextEditingController(
       text: isEditing ? cowToEdit.notes : '',
     );
-    // YENİ: Yavru sayısı düzenleme
+    // YENİ: Yavru sayısı düzenleme eklendi
     final calfCtrl = TextEditingController(
       text: isEditing ? cowToEdit.calfCount.toString() : '0',
     );
@@ -172,7 +172,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
                             onTap: () async {
                               final date = await showDatePicker(
                                 context: context,
-                                initialDate: DateTime.now(),
+                                initialDate: selectedDate ?? DateTime.now(),
                                 firstDate: DateTime(2000),
                                 lastDate: DateTime.now(),
                               );
@@ -496,7 +496,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
                     ]),
                     const SizedBox(height: 15),
 
-                    // SADECE SÜT ÜRETİMİ KALDI
+                    // SADECE SÜT ÜRETİMİ KALDI (Maliyet/Kazanç Silindi)
                     _buildDetailCard('Süt Üretimi', [
                       _buildInfoRow(
                         Icons.water_drop,
@@ -612,8 +612,8 @@ class _CowsViewState extends ConsumerState<CowsView> {
                                     .read(cowProvider.notifier)
                                     .deleteCow(cow.id);
                                 if (mounted) {
-                                  Navigator.pop(ctx); // Dialogu kapat
-                                  Navigator.pop(context); // BottomSheet'i kapat
+                                  Navigator.pop(ctx);
+                                  Navigator.pop(context);
                                   if (success)
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -889,7 +889,7 @@ class _CowsViewState extends ConsumerState<CowsView> {
       ),
       body: Column(
         children: [
-          // YENİ: KAMERA BUTONU EKLENDİ
+          // YENİ: KAMERA BUTONU GERİ EKLENDİ
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: InkWell(

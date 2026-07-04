@@ -12,10 +12,6 @@ class SettingsView extends ConsumerStatefulWidget {
 
 class _SettingsViewState extends ConsumerState<SettingsView> {
   final _nameCtrl = TextEditingController();
-  final _milkPriceCtrl = TextEditingController(text: '15.50');
-  final _feedPriceCtrl = TextEditingController(text: '12.00');
-  final _strawPriceCtrl = TextEditingController(text: '50.00');
-  final _silagePriceCtrl = TextEditingController(text: '4.50');
 
   final List<String> _categories = [
     'Süt Veren İnekler',
@@ -25,6 +21,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
     'Buzağılar',
   ];
   String _selectedCategory = 'Süt Veren İnekler';
+
   final Map<String, Map<String, TextEditingController>> _categoryCoefficients =
       {};
   bool _isSaving = false;
@@ -75,13 +72,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
 
   Future<void> _saveSettings() async {
     setState(() => _isSaving = true);
-    Map<String, dynamic> dataToSave = {
-      'profile_name': _nameCtrl.text,
-      'milk_price': _milkPriceCtrl.text,
-      'feed_price': _feedPriceCtrl.text,
-      'straw_price': _strawPriceCtrl.text,
-      'silage_price': _silagePriceCtrl.text,
-    };
+
+    // Sadece isim ve süt üretimleri kaydedilecek
+    Map<String, dynamic> dataToSave = {'profile_name': _nameCtrl.text};
+
     for (var cat in _categories) {
       String prefix = cat
           .replaceAll(' ', '_')
@@ -92,13 +86,15 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           .replaceAll('ş', 's')
           .replaceAll('ö', 'o')
           .replaceAll('ç', 'c');
-      final ctrls = _categoryCoefficients[cat]!;
-      dataToSave['${prefix}_prodMilk'] = ctrls['prodMilk']!.text;
+
+      dataToSave['${prefix}_prodMilk'] =
+          _categoryCoefficients[cat]!['prodMilk']!.text;
     }
 
     final success = await ref
         .read(settingsProvider.notifier)
         .saveSettings(dataToSave);
+
     if (mounted) {
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -123,14 +119,6 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
           next.value!.isNotEmpty) {
         final data = next.value!;
         _nameCtrl.text = data['profile_name']?.toString() ?? _nameCtrl.text;
-        _milkPriceCtrl.text =
-            data['milk_price']?.toString() ?? _milkPriceCtrl.text;
-        _feedPriceCtrl.text =
-            data['feed_price']?.toString() ?? _feedPriceCtrl.text;
-        _strawPriceCtrl.text =
-            data['straw_price']?.toString() ?? _strawPriceCtrl.text;
-        _silagePriceCtrl.text =
-            data['silage_price']?.toString() ?? _silagePriceCtrl.text;
 
         for (var cat in _categories) {
           String prefix = cat
@@ -142,9 +130,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
               .replaceAll('ş', 's')
               .replaceAll('ö', 'o')
               .replaceAll('ç', 'c');
-          final ctrls = _categoryCoefficients[cat]!;
-          ctrls['prodMilk']!.text =
-              data['${prefix}_prodMilk']?.toString() ?? ctrls['prodMilk']!.text;
+
+          _categoryCoefficients[cat]!['prodMilk']!.text =
+              data['${prefix}_prodMilk']?.toString() ??
+              _categoryCoefficients[cat]!['prodMilk']!.text;
         }
       }
     });
@@ -193,99 +182,10 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   ),
                 ),
               ),
-              const SizedBox(height: 30),
-              Row(
-                children: [
-                  Container(
-                    width: 5,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryGreen,
-                      borderRadius: BorderRadius.circular(5),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Piyasa Birim Fiyatları',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.black,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.white,
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: AppColors.black, width: 2.5),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _milkPriceCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Süt Satış',
-                              Icons.water_drop,
-                              suffix: '₺/L',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _feedPriceCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Yem Alış',
-                              Icons.shopping_bag,
-                              suffix: '₺/Kg',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 15),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _strawPriceCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Saman Alış',
-                              Icons.grass,
-                              suffix: '₺/Bl',
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _silagePriceCtrl,
-                            keyboardType: TextInputType.number,
-                            decoration: _premiumInputDeco(
-                              'Silaj Alış',
-                              Icons.eco,
-                              suffix: '₺/Kg',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
               const SizedBox(height: 35),
+
               const Text(
-                'Kategori Oranları',
+                'Süt Üretim Beklentileri',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -294,7 +194,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                 ),
               ),
               Text(
-                'Seçilen kategorideki bir hayvanın "Günlük" ortalama süt üretimi.',
+                'Seçilen kategorideki bir hayvanın "Günlük" ortalama süt üretimi beklentisi.',
                 style: TextStyle(
                   fontSize: 14,
                   color: AppColors.black.withOpacity(0.6),
@@ -349,7 +249,7 @@ class _SettingsViewState extends ConsumerState<SettingsView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '📊 Ortalama $_selectedCategory Girdileri',
+                      '📊 Ortalama $_selectedCategory',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

@@ -16,6 +16,9 @@ class CowNotifier extends AsyncNotifier<List<Cow>> {
   // Sadece Listeyi Getiren Yardımcı Fonksiyon
   Future<List<Cow>> _fetchCows() async {
     try {
+      // YENİ: Uygulama açıldığında arka planda sütleri ekleme motorunu tetikler
+      await _dioClient.dio.get('system/daily-check');
+
       final response = await _dioClient.dio.get('cows');
       if (response.statusCode == 200) {
         final List<dynamic> data = response.data;
